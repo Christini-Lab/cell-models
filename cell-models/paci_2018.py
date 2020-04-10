@@ -5,7 +5,6 @@ from cell_model import CellModel
 import numpy as np
 from scipy import integrate
 
-import ga_configs
 import protocols
 import trace
 
@@ -503,9 +502,7 @@ class PaciModel(CellModel):
         self.d_y_voltage.append(d_y[0])
         return d_y
 
-def generate_trace(protocol: protocols.PROTOCOL_TYPE,
-                   tunable_parameters: List[ga_configs.Parameter] = None,
-                   params: List[float] = None) -> trace.Trace:
+def generate_trace(protocol, tunable_parameters=None, params=None):
     """Generates a trace.
 
     Leave `params` argument empty if generating baseline trace with

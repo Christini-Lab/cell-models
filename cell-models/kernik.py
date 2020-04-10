@@ -6,7 +6,6 @@ from current_models import KernikCurrents, Ishi
 import numpy as np
 from scipy import integrate
 
-import ga_configs
 import protocols
 import trace
 from math import log, exp
@@ -240,10 +239,7 @@ class KernikModel(CellModel):
         return d_y
 
 
-def generate_trace(protocol: protocols.PROTOCOL_TYPE,
-                   tunable_parameters: List[ga_configs.Parameter] = None,
-
-                   params: List[float] = None) -> trace.Trace:
+def generate_trace(protocol, tunable_parameters=None, params=None):
     """Generates a trace.
 
     Leave `params` argument empty if generating baseline trace with

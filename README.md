@@ -6,7 +6,7 @@ This package is meant to contain all Christini Lab models that are implemented i
 
 This Python project is written in [Python Packaging format](https://packaging.python.org/tutorials/packaging-projects/). If you want to play around with the models quickly, you can `cd` into `cell-models/` and edit the `main.py` file. 
 
-If you want to install these models locally, you can simply run `python3 setup.py`. This will make the files in `cell-models/` globally available. 
+If you want to install these models locally, you can run `python3 setup.py` from the project root. This will make the files in `cell-models/` globally available. 
 
 ### Tutorial
 

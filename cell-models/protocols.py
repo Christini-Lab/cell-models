@@ -11,7 +11,7 @@ class SpontaneousProtocol:
 
 class PacedProtocol:
     """Encapsulates state and behavior of a paced protocol"""
-    def __init__(self, model_name, stim_end=60000,
+    def __init__(self, model_name, stim_end=6000,
                  stim_start=10, pace=1):
         """
         model_name: "Paci", "Kernik", "OR"

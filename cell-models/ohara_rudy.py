@@ -5,7 +5,6 @@ from cell_model import CellModel
 import numpy as np
 from scipy import integrate
 
-import ga_configs
 import protocols
 import trace
 from math import log, exp

@@ -1,12 +1,12 @@
 import math
 from typing import List
-from cell_model import CellModel
+from cell_models.cell_model import CellModel
 
 import numpy as np
 from scipy import integrate
 
-import protocols
-import trace
+from cell_models import protocols
+from cell_models import trace
 from math import log, exp
 
 

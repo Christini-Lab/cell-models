@@ -1,13 +1,15 @@
 from math import log, sqrt 
 from typing import List
-from cell_model import CellModel
-from current_models import KernikCurrents, Ishi
+
+from cell_models.cell_model import CellModel
+from cell_models.current_models import KernikCurrents, Ishi
 
 import numpy as np
 from scipy import integrate
 
-import protocols
-import trace
+from cell_models import protocols
+from cell_models import trace
+from cell_models.model_initial import kernik_model_initial 
 from math import log, exp
 
 
@@ -64,7 +66,7 @@ class KernikModel(CellModel):
             'G_PCa': 1
         }
 
-        y_initial = np.loadtxt('model_data/y_initial.csv')
+        y_initial = kernik_model_initial()
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
@@ -207,8 +209,6 @@ class KernikModel(CellModel):
                     i_no_ion += scale * i_K1_ishi
                 else:
                     i_no_ion += scale * current_dictionary[curr_name]
-                import pdb
-                pdb.set_trace()
 
 
         # --------------------------------------------------------------------

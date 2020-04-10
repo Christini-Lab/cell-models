@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from scipy.signal import argrelextrema
-import protocols
+from cell_models import protocols
 
 
 class IrregularPacingInfo:

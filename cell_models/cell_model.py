@@ -5,8 +5,8 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 
-import protocols
-import trace
+from cell_models import protocols
+from cell_models import trace
 
 
 class CellModel:
@@ -79,6 +79,8 @@ class CellModel:
             A Trace object representing the change in membrane potential over
             time.
         """
+        import pdb
+        pdb.set_trace()
         # Reset instance variables when model is run again.
         self.t = []
         self.y_voltage = []
@@ -87,6 +89,7 @@ class CellModel:
         self.current_response_info = None
 
         self.is_no_ion_selective = is_no_ion_selective
+
 
         if isinstance(protocol, protocols.SpontaneousProtocol):
             return self.generate_spontaneous_response(protocol)

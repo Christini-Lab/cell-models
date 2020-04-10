@@ -1,3 +1,6 @@
 .mypy_cache
 .DS_Store
-cell-models/__pycache__/
+cell-models/__pycache__
+dist
+*.egg-info
+build

@@ -5,12 +5,12 @@ import copy
 import time
 import matplotlib.pyplot as plt
 
-import protocols
-from protocols import VoltageClampStep
+from cell_models import protocols
+from cell_models.protocols import VoltageClampStep
 
-from kernik import KernikModel
-from paci_2018 import PaciModel
-from ohara_rudy import OharaRudyModel
+from cell_models.kernik import KernikModel
+from cell_models.paci_2018 import PaciModel
+from cell_models.ohara_rudy import OharaRudyModel
 
 # Spontaneous / Stimulated
 def spontaneous_example():
@@ -42,6 +42,7 @@ def example_update_params():
     parameters in the KernikModel() __init__.
     """
     KERNIK_PROTOCOL = protocols.SpontaneousProtocol(2000)
+    
     kernik_baseline = KernikModel()
     kernik_updated = KernikModel(
             updated_parameters={'G_K1': 1.2, 'G_Kr': 0.8, 'G_Na':2.2})

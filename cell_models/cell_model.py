@@ -79,8 +79,6 @@ class CellModel:
             A Trace object representing the change in membrane potential over
             time.
         """
-        import pdb
-        pdb.set_trace()
         # Reset instance variables when model is run again.
         self.t = []
         self.y_voltage = []
@@ -295,19 +293,25 @@ class CellModel:
         self.current_response_info = trace.CurrentResponseInfo(
             protocol=protocol)
 
-        solution = integrate.solve_ivp(
-            self.generate_voltage_clamp_function(protocol),
-            [0, protocol.get_voltage_change_endpoints()[-1]],
-            y_init,
-            method='BDF',
-            max_step=1e-3*self.time_conversion)
+        try:
+            solution = integrate.solve_ivp(
+                self.generate_voltage_clamp_function(protocol),
+                [0, protocol.get_voltage_change_endpoints()[-1]],
+                y_init,
+                method='BDF',
+                max_step=1e-3*self.time_conversion)
 
-        self.t = solution.t
-        self.y = solution.y
-        #self.y_initial = self.y[:,-1]
-        self.y_voltage = solution.y[self.default_voltage_position,:]
+            self.t = solution.t
+            self.y = solution.y
+            #self.y_initial = self.y[:,-1]
+            self.y_voltage = solution.y[self.default_voltage_position,:]
 
-        self.calc_currents()
+            self.calc_currents()
+        except:
+            print("There was a math domain error in the diff eq evaluation")
+            return None
+
+
 
         return trace.Trace(self.t,
                            self.y_voltage,

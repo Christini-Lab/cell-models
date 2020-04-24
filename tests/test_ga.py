@@ -6,7 +6,7 @@ from cell_models import protocols
 
 import unittest
 
-class BasicTestSuite(unittest.TestCase):
+class TestGA(unittest.TestCase):
     """Basic test cases."""
     def setUp(self):
         KERNIK_PARAMETERS = [
@@ -37,20 +37,33 @@ class BasicTestSuite(unittest.TestCase):
             gene_mutation_probability=0.2,
             tournament_size=4)
 
-    #def test_baseline_parameter_tuning(self):
-    #    res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
-    #                                                 self.vc_config,
-    #                                                 self.kernik_protocol)
-    #    
-    #    assert True
+    def test_baseline_parameter_tuning(self):
+        """
+        Test if the baseline model generates a valid response
+        """
+        res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
+                                                     self.vc_config,
+                                                     self.kernik_protocol)
+        
+        self.assertIsNotNone(res_kernik.target.t,
+                        "There was an error when initializing the target")
 
     def test_random_parameter_tuning(self):
+        """
+        Test if a random model generates a valid response
+        """
         res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
                                                      self.vc_config,
                                                      self.kernik_protocol,
                                                      is_target_baseline=False)
-        
-        assert True
+
+        self.assertIsNotNone(res_kernik.target.t,
+                        "There was an error when initializing the target")
+
+    def test_run_ga(self):
+
+        self.assert_(False)
+
 
 if __name__ == '__main__':
     unittest.main()

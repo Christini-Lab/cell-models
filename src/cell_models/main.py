@@ -53,11 +53,46 @@ def example_update_params():
     plt.legend()
     plt.show()
 
+# Run parameter tuning experiment
+def run_parameter_tuning():
+    from cell_models.ga.parameter_tuning import ParameterTuningGeneticAlgorithm
+    from cell_models.ga import ga_configs
+
+    KERNIK_PARAMETERS = [
+        ga_configs.Parameter(name='G_Na', default_value=1),
+        ga_configs.Parameter(name='G_F', default_value=1),
+        ga_configs.Parameter(name='G_Ks', default_value=1),
+        ga_configs.Parameter(name='G_Kr', default_value=1),
+        ga_configs.Parameter(name='G_K1', default_value=1),
+        ga_configs.Parameter(name='G_b_Na', default_value=1),
+        ga_configs.Parameter(name='P_CaL', default_value=1),
+        ga_configs.Parameter(name='G_PCa', default_value=1),
+        ga_configs.Parameter(name='G_b_Ca', default_value=1),
+        ga_configs.Parameter(name='K_NaCa', default_value=1)
+    ]
+
+    KERNIK_PROTOCOL = protocols.VoltageClampProtocol()
+
+    VC_CONFIG = ga_configs.ParameterTuningConfig(
+        population_size=30,
+        max_generations=10,
+        protocol=KERNIK_PROTOCOL,
+        tunable_parameters=KERNIK_PARAMETERS,
+        params_lower_bound=0.1,
+        params_upper_bound=10,
+        mate_probability=0.9,
+        mutate_probability=0.9,
+        gene_swap_probability=0.2,
+        gene_mutation_probability=0.2,
+        tournament_size=4)
+
+    res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
+                                                 VC_CONFIG,
+                                                 KERNIK_PROTOCOL)
+
 
 def main():
-    example_update_params()
-
+    run_parameter_tuning()
 
 if __name__ == '__main__':
     main()
-

@@ -8,7 +8,6 @@ from scipy.signal import argrelextrema
 from cell_models import protocols
 from cell_models import trace
 
-
 class CellModel:
     """An implementation a general cell model
 
@@ -98,8 +97,7 @@ class CellModel:
         elif isinstance(protocol, protocols.PacedProtocol):
             return self.generate_pacing_response(protocol)
 
-    def find_steady_state(self, ss_type=None, from_peak=False, time_unit='ms', tol = 5E-3, max_iters=140):
-        
+    def find_steady_state(self, ss_type=None, from_peak=False, time_unit='ms', tol = 1E-3, max_iters=140):
         """
         Finds the steady state conditions for a spontaneous or stimulated
         (in the case of OR) AP
@@ -109,52 +107,51 @@ class CellModel:
 
         if (ss_type is None) and (self.time_conversion == 1000.0):
             protocol = protocols.VoltageClampProtocol(
-                    [protocols.VoltageClampStep(voltage=-80.0, duration=20000)])
+                [protocols.VoltageClampStep(voltage=-80.0, duration=10000)])
 
         if (ss_type is None) and (self.time_conversion == 1.0):
             protocol = protocols.VoltageClampProtocol(
-                    [protocols.VoltageClampStep(voltage=-.080, duration=20)])
-
-
-                 
+                [protocols.VoltageClampStep(voltage=-.080, duration=10)])
 
         concentration_indices = list(self.concentration_indices.values())
 
         is_err = True
         i = 0
         y_values = []
-        
+
         import time
         outer_time = time.time()
 
+        print("Starting to find steady-state")
         while is_err:
             init_t = time.time()
-            
+
             tr = self.generate_response(protocol)
 
             if isinstance(protocol, protocols.VoltageClampProtocol):
-                y_val = self.y[:,-1]
+                y_val = self.y[:, -1]
             else:
                 y_val = self.get_last_min_max(from_peak)
-            self.y_initial = self.y[:,-1]
+            self.y_initial = self.y[:, -1]
             y_values.append(y_val)
             y_percent = []
 
             if len(y_values) > 2:
                 y_percent = np.abs((y_values[i][concentration_indices] -
-                                         y_values[i- 1][concentration_indices]) / (
-                                         y_values[i][concentration_indices]))
+                                    y_values[i - 1][concentration_indices]) / (
+                    y_values[i][concentration_indices]))
                 is_below_tol = (y_percent < tol)
                 is_err = not is_below_tol.all()
 
             if i > max_iters:
                 print("Did not reach steady state")
                 self.y_ss = np.ones(23)
-                return 
+                return
 
             i = i + 1
-            print(f'Iteration {i}; {time.time() - init_t} seconds; {y_percent}')
-        
+            print(
+                f'Iteration {i}; {time.time() - init_t} seconds; {y_percent}')
+
         self.y_ss = y_values[-1]
         print(f'Total Time: {time.time() - outer_time}')
         return [tr, i]

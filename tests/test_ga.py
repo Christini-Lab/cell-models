@@ -61,9 +61,15 @@ class TestGA(unittest.TestCase):
                         "There was an error when initializing the target")
 
     def test_run_ga(self):
+        res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
+                                                     self.vc_config,
+                                                     self.kernik_protocol)
+        res_kernik.run_ga()
+
 
         self.assert_(False)
 
 
 if __name__ == '__main__':
     unittest.main()
+

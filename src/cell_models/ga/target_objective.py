@@ -8,7 +8,7 @@ from cell_models import protocols, kernik, paci_2018
 
 class TargetObjective():
     def __init__(self, capacitance, file_name='./model_data/exp_vc_trial2.csv',
-            protocol=protocols.VoltageClampProtocol):
+        protocol=protocols.VoltageClampProtocol):
         self.target = pd.read_csv(file_name)
         self.target.columns = ['time', 'voltage', 'current']
         self.protocol = protocol
@@ -64,3 +64,4 @@ class TargetObjective():
         print(norm_error)
 
         return norm_error
+

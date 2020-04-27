@@ -390,3 +390,34 @@ class Trace:
                               'was not generated with voltage clamp protocol.')
 
         plt.plot(self.t*time_conversion, self.current_response_info.get_current_summed(), label=label)
+
+    def adjust_sampling(self, frequency=1000):
+        """
+        The purpose of this function is to return the specified parameter with
+        a different sampling rate. It makes it easier to find an error in a GA
+        because the traces will be sampled at the same timepoints.
+
+        Parameters
+        ----------
+        frequency : integer
+            The number of samples per millisecond to resample the trace
+            from starting point to end point.
+        """
+        return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -13,7 +13,7 @@ from math import log10
 from deap import base, creator, tools
 import numpy as np
 from scipy.interpolate import interp1d
-from pickle import dump, HIGHEST_PROTOCOL
+from pickle import dump, HIGHEST_PROTOCOL, load
 import time
 import copy
 import multiprocessing
@@ -26,6 +26,7 @@ from cell_models import trace
 
 from cell_models.ga import target_objective
 from cell_models.ga import ga_configs
+from cell_models.ga import genetic_algorithm_results
 
 
 class ParameterTuningGeneticAlgorithm():
@@ -77,16 +78,13 @@ class ParameterTuningGeneticAlgorithm():
         """
         print('Evaluating initial population.')
 
-        #keys = [val.name for val in self.vc_config.tunable_parameters]
-
         population = self.toolbox.population(self.vc_config.population_size)
 
-        import pdb
-        pdb.set_trace()
-        fitnesses = toolbox.map(toolbox.evaluate, eval_input)
+        fitnesses = self.toolbox.map(self.toolbox.evaluate, population)
 
         for ind, fit in zip(population, fitnesses):
             ind.fitness.values = [fit]
+
 
         # Store initial population details for result processing.
         initial_population = []
@@ -100,22 +98,22 @@ class ParameterTuningGeneticAlgorithm():
 
         final_population = [initial_population]
 
-        for generation in range(1, config.max_generations):
+        for generation in range(1, self.vc_config.max_generations):
             print('Generation {}'.format(generation))
             # Offspring are chosen through tournament selection. They are then
             # cloned, because they will be modified in-place later on.
-            selected_offspring = toolbox.select(population, len(population))
-            offspring = [toolbox.clone(i) for i in selected_offspring]
+            selected_offspring = self.toolbox.select(population, len(population))
+            offspring = [self.toolbox.clone(i) for i in selected_offspring]
 
             for i_one, i_two in zip(offspring[::2], offspring[1::2]):
-                if random.random() < config.mate_probability:
-                    toolbox.mate(i_one, i_two, config)
+                if random.random() < self.vc_config.mate_probability:
+                    self.toolbox.mate(i_one, i_two)
                     del i_one.fitness.values
                     del i_two.fitness.values
 
             for i in offspring:
-                if random.random() < config.mutate_probability:
-                    toolbox.mutate(i, config)
+                if random.random() < self.vc_config.mutate_probability:
+                    self.toolbox.mutate(i)
                     del i.fitness.values
 
             # All individuals who were updated, either through crossover or
@@ -124,8 +122,7 @@ class ParameterTuningGeneticAlgorithm():
 
 
             num_inputs = len(updated_individuals)
-            eval_input = np.transpose([updated_individuals, time_conversions[0:num_inputs], protocols[0:num_inputs]])
-            fitnesses = toolbox.map(toolbox.evaluate, eval_input)
+            fitnesses = self.toolbox.map(self.toolbox.evaluate, updated_individuals)
 
             for ind, fit in zip(updated_individuals, fitnesses):
                 ind.fitness.values = [fit]
@@ -162,24 +159,35 @@ class ParameterTuningGeneticAlgorithm():
                was given incompatible inputs. You should not set is_baseline to
                True and add a value for updated_parameters""")
 
+
         if not is_baseline:
-            random_ss = np.load(pkg_resources.resource_stream(
-                __name__, "models_at_ss.npy"), allow_pickle=True)
+            try:
+                tr = load(pkg_resources.resource_stream(
+                    __name__, "random5_trace"))
+                return tr
+            except:
+                random_ss = np.load(pkg_resources.resource_stream(
+                    __name__, "models_at_ss.npy"), allow_pickle=True)
 
-            index = 5
+                index = 5
 
-            target_cell = self.cell_model(
-                updated_parameters=random_ss[index][0])
+                target_cell = self.cell_model(
+                    updated_parameters=random_ss[index][0])
 
-            target_cell.y_initial = random_ss[index][1]
-            target_cell.y_ss = random_ss[index][1]
+                target_cell.y_initial = random_ss[index][1]
+                target_cell.y_ss = random_ss[index][1]
 
         else:
-            target_cell = self.cell_model()
-            baseline_y_ss = np.load(pkg_resources.resource_stream(
-                __name__, "baseline_ss.npy"), allow_pickle=True)
-            target_cell.y_ss = baseline_y_ss[1]
-            target_cell.y_initial = baseline_y_ss[1]
+            try:
+                tr = load(pkg_resources.resource_stream(
+                    __name__, "baseline_trace"))
+                return tr
+            except:
+                target_cell = self.cell_model()
+                baseline_y_ss = np.load(pkg_resources.resource_stream(
+                    __name__, "baseline_ss.npy"), allow_pickle=True)
+                target_cell.y_ss = baseline_y_ss[1]
+                target_cell.y_initial = baseline_y_ss[1]
 
         tr = self.get_model_response(target_cell, self.protocol)
 
@@ -242,12 +250,12 @@ class ParameterTuningGeneticAlgorithm():
         toolbox.register('mate', self._mate)
         toolbox.register('mutate', self._mutate)
 
-        mapping_pool = multiprocessing.Pool()
-        toolbox.register("map", mapping_pool.map)
+        #mapping_pool = multiprocessing.Pool()
+        #toolbox.register("map", mapping_pool.map)
 
         return toolbox
 
-    def _initialize_individuals(self):
+    def _initialize_individuals(self, vc_config, cell_model):
         """
         Creates the initial population of individuals. The initial 
         population 
@@ -256,15 +264,15 @@ class ParameterTuningGeneticAlgorithm():
             A model instance with a new set of parameters
         """
         # Builds a list of parameters using random upper and lower bounds.
-        lower_exp = log10(self.vc_config.params_lower_bound)
-        upper_exp = log10(self.vc_config.params_upper_bound)
+        lower_exp = log10(vc_config.params_lower_bound)
+        upper_exp = log10(vc_config.params_upper_bound)
         initial_params = [10**random.uniform(lower_exp, upper_exp)
                           for i in range(0, len(
-                              self.vc_config.tunable_parameters))]
+                              vc_config.tunable_parameters))]
 
-        keys = [val.name for val in self.vc_config.tunable_parameters]
+        keys = [val.name for val in vc_config.tunable_parameters]
 
-        return self.cell_model(
+        return cell_model(
             updated_parameters=dict(zip(keys, initial_params)))
 
     def _evaluate_performance(self, individual):
@@ -277,9 +285,9 @@ class ParameterTuningGeneticAlgorithm():
                     The error between the trace generated by the individual's
                     parameter set and the baseline target objective.
         """
+        individual = individual[0]
         try:
-            individual.find_steady_state()
-            primary_trace = individual.generate_response(self.target_protocol)
+            primary_trace = self.get_model_response(individual, self.protocol)
         except:
             return 100
 
@@ -287,6 +295,9 @@ class ParameterTuningGeneticAlgorithm():
             print("Individual errored while generating current response")
 
         error = self.target.compare_individual(primary_trace)
+
+        import pdb
+        pdb.set_trace()
 
         return error
 
@@ -329,3 +340,11 @@ class ParameterTuningGeneticAlgorithm():
                             individual[0].default_parameters[key] * .3)
 
                 individual[0].default_parameters[key] = new_param
+
+def generate_statistics(population: List[List[List[float]]]) -> None:
+    fitness_values = [i.fitness.values[0] for i in population]
+    print('  Min fitness: {}'.format(min(fitness_values)))
+    print('  Max fitness: {}'.format(max(fitness_values)))
+    print('  Average fitness: {}'.format(np.mean(fitness_values)))
+    print('  Standard deviation: {}'.format(np.std(fitness_values)))
+

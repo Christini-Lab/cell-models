@@ -4,3 +4,4 @@ cell-models/__pycache__
 dist
 *.egg-info
 build
+src/cell_models/__pycache__

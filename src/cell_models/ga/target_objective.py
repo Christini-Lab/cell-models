@@ -6,6 +6,7 @@ from math import floor, log, ceil
 
 from cell_models import protocols, kernik, paci_2018
 
+
 class TargetObjective():
     def __init__(self, capacitance, file_name='./model_data/exp_vc_trial2.csv',
         protocol=protocols.VoltageClampProtocol):

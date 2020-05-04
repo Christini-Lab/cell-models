@@ -81,10 +81,9 @@ class ParameterTuningGeneticAlgorithm():
         population = self.toolbox.population(self.vc_config.population_size)
 
         fitnesses = self.toolbox.map(self.toolbox.evaluate, population)
-
+       
         for ind, fit in zip(population, fitnesses):
             ind.fitness.values = [fit]
-
 
         # Store initial population details for result processing.
         initial_population = []
@@ -93,8 +92,6 @@ class ParameterTuningGeneticAlgorithm():
                 genetic_algorithm_results.ParameterTuningIndividual(
                     parameters=population[i][0].default_parameters,
                     fitness=population[i].fitness.values[0]))
-
-        x = time.time()
 
         final_population = [initial_population]
 
@@ -137,10 +134,10 @@ class ParameterTuningGeneticAlgorithm():
                         parameters=population[i][0].default_parameters,
                         fitness=population[i].fitness.values[0]))
 
-            final_population.append(population)
+            final_population.append(intermediate_population)
 
             generate_statistics(population)
-            print(time.time() - x)
+
         return final_population
 
     def initialize_target(self, is_baseline=True, updated_parameters=None):
@@ -164,6 +161,7 @@ class ParameterTuningGeneticAlgorithm():
             try:
                 tr = load(pkg_resources.resource_stream(
                     __name__, "random5_trace"))
+                tr.is_interpolated = False
                 return tr
             except:
                 random_ss = np.load(pkg_resources.resource_stream(
@@ -181,6 +179,7 @@ class ParameterTuningGeneticAlgorithm():
             try:
                 tr = load(pkg_resources.resource_stream(
                     __name__, "baseline_trace"))
+                tr.is_interpolated = False
                 return tr
             except:
                 target_cell = self.cell_model()
@@ -189,11 +188,12 @@ class ParameterTuningGeneticAlgorithm():
                 target_cell.y_ss = baseline_y_ss[1]
                 target_cell.y_initial = baseline_y_ss[1]
 
+    
         tr = self.get_model_response(target_cell, self.protocol)
 
         return tr
 
-    def get_model_response(self, model, protocol, prestep=10):
+    def get_model_response(self, model, protocol, prestep=10000.0):
         """
         Parameters
         ----------
@@ -213,11 +213,12 @@ class ParameterTuningGeneticAlgorithm():
         """
         prestep_protocol = protocols.VoltageClampProtocol(
             [protocols.VoltageClampStep(voltage=-80.0,
-                                        duration=prestep*1000.0)])
+                                        duration=prestep)])
 
         model.generate_response(prestep_protocol)
 
         model.y_ss = model.y[:, -1]
+
         response_trace = model.generate_response(protocol)
 
         return response_trace
@@ -250,8 +251,7 @@ class ParameterTuningGeneticAlgorithm():
         toolbox.register('mate', self._mate)
         toolbox.register('mutate', self._mutate)
 
-        #mapping_pool = multiprocessing.Pool()
-        #toolbox.register("map", mapping_pool.map)
+        toolbox.register("map", parmap)
 
         return toolbox
 
@@ -286,6 +286,8 @@ class ParameterTuningGeneticAlgorithm():
                     parameter set and the baseline target objective.
         """
         individual = individual[0]
+        print("individual running")
+        
         try:
             primary_trace = self.get_model_response(individual, self.protocol)
         except:
@@ -294,10 +296,8 @@ class ParameterTuningGeneticAlgorithm():
         if not primary_trace:
             print("Individual errored while generating current response")
 
-        error = self.target.compare_individual(primary_trace)
 
-        import pdb
-        pdb.set_trace()
+        error = self.target.compare_individual(primary_trace)
 
         return error
 
@@ -345,6 +345,31 @@ def generate_statistics(population: List[List[List[float]]]) -> None:
     fitness_values = [i.fitness.values[0] for i in population]
     print('  Min fitness: {}'.format(min(fitness_values)))
     print('  Max fitness: {}'.format(max(fitness_values)))
+
     print('  Average fitness: {}'.format(np.mean(fitness_values)))
     print('  Standard deviation: {}'.format(np.std(fitness_values)))
 
+def fun(f, q_in, q_out):
+    while True:
+        i, x = q_in.get()
+        if i is None:
+            break
+        q_out.put((i, f(x)))
+
+def parmap(f, X, nprocs=multiprocessing.cpu_count()):
+    q_in = multiprocessing.Queue(1)
+    q_out = multiprocessing.Queue()
+
+    proc = [multiprocessing.Process(target=fun, args=(f, q_in, q_out))
+            for _ in range(nprocs)]
+    for p in proc:
+        p.daemon = True
+        p.start()
+
+    sent = [q_in.put((i, x)) for i, x in enumerate(X)]
+    [q_in.put((None, None)) for _ in range(nprocs)]
+    res = [q_out.get() for _ in range(len(sent))]
+
+    [p.join() for p in proc]
+
+    return [x for i, x in sorted(res)]

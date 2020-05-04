@@ -5,6 +5,7 @@ from typing import List
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.interpolate import interp1d
 
 from scipy.signal import argrelextrema
 from cell_models import protocols
@@ -287,6 +288,8 @@ class Trace:
                  y: List[float],
                  pacing_info: IrregularPacingInfo=None,
                  current_response_info: CurrentResponseInfo=None) -> None:
+
+        self.is_interpolated = False
         self.t = np.array(t)
         self.y = np.array(y)
         self.pacing_info = pacing_info
@@ -405,14 +408,28 @@ class Trace:
         """
         return
 
+    def compare_individual(self, individual):
+        if individual is None:
+            return 100
+        if not self.is_interpolated:
+            self.interp_time = np.linspace(self.t[0], self.t[-1], int(
+                self.t[-1] - self.t[0]))
 
+            f = interp1d(self.t,
+                         self.current_response_info.get_current_summed())
 
+            self.interp_current = f(self.interp_time)
 
+            self.is_interpolated = True
 
+        f = interp1d(individual.t,
+                     individual.current_response_info.get_current_summed())
 
+        individual_current = f(self.interp_time)
 
+        error = np.log10(sum(abs(self.interp_current - individual_current)))
 
-
+        return error 
 
 
 

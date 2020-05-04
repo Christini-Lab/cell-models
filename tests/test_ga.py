@@ -25,8 +25,8 @@ class TestGA(unittest.TestCase):
         self.kernik_protocol = protocols.VoltageClampProtocol()
 
         self.vc_config = ga_configs.ParameterTuningConfig(
-            population_size=30,
-            max_generations=10,
+            population_size=60,
+            max_generations=60,
             protocol=self.kernik_protocol,
             tunable_parameters=KERNIK_PARAMETERS,
             params_lower_bound=0.1,
@@ -64,8 +64,7 @@ class TestGA(unittest.TestCase):
         res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
                                                      self.vc_config,
                                                      self.kernik_protocol)
-        res_kernik.run_ga()
-
+        final_population = res_kernik.run_ga()
 
         self.assert_(False)
 

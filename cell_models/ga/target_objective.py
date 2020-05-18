@@ -61,7 +61,7 @@ class TargetObjective():
             prev_idx = curr_idx
             i += 1
 
-        norm_error = log(error / len(times))
+        norm_error = error
         print(norm_error)
 
         return norm_error

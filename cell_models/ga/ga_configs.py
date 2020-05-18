@@ -110,7 +110,8 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
                  gene_swap_probability: float,
                  gene_mutation_probability: float,
                  tournament_size: int,
-                 secondary_protocol: protocols.PROTOCOL_TYPE=None) -> None:
+                 secondary_protocol: protocols.PROTOCOL_TYPE=None,
+                 target_params=None) -> None:
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -124,6 +125,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
         self.params_upper_bound = params_upper_bound
         self.tunable_parameters = tunable_parameters
         self.secondary_protocol = secondary_protocol
+        self.target_params = target_params
 
     def has_equal_hyperparameters(self, other: 'ParameterTuningConfig') -> bool:
         return (super().has_equal_hyperparameters(other=other) and

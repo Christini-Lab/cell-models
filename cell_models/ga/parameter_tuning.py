@@ -63,6 +63,7 @@ class ParameterTuningGeneticAlgorithm():
         self.vc_config = vc_config
         self.protocol = protocol
         self.toolbox = self.initialize_toolbox()
+        self.previous_population = None
 
         if is_parameter_recovery:
             self.target = self.initialize_target(
@@ -71,7 +72,7 @@ class ParameterTuningGeneticAlgorithm():
     def run_ga(self):
         """
         Runs an instance of the genetic algorithm.
-        
+
         Returns
         -------
         final_population : List[model obects]
@@ -99,7 +100,10 @@ class ParameterTuningGeneticAlgorithm():
             print('Generation {}'.format(generation))
             # Offspring are chosen through tournament selection. They are then
             # cloned, because they will be modified in-place later on.
+            self.previous_population = population
+
             selected_offspring = self.toolbox.select(population, len(population))
+
             offspring = [self.toolbox.clone(i) for i in selected_offspring]
 
             for i_one, i_two in zip(offspring[::2], offspring[1::2]):
@@ -116,7 +120,6 @@ class ParameterTuningGeneticAlgorithm():
             # All individuals who were updated, either through crossover or
             # mutation, will be re-evaluated.
             updated_individuals = [i for i in offspring if not i.fitness.values]
-
 
             num_inputs = len(updated_individuals)
             fitnesses = self.toolbox.map(self.toolbox.evaluate, updated_individuals)
@@ -137,6 +140,8 @@ class ParameterTuningGeneticAlgorithm():
             final_population.append(intermediate_population)
 
             generate_statistics(population)
+            import pdb
+            pdb.set_trace()
 
         return final_population
 
@@ -160,7 +165,7 @@ class ParameterTuningGeneticAlgorithm():
         if not is_baseline:
             try:
                 tr = load(pkg_resources.resource_stream(
-                    __name__, "random5_trace"))
+                    __name__, "random5_trace.npy"))
                 tr.is_interpolated = False
                 return tr
             except:
@@ -178,7 +183,7 @@ class ParameterTuningGeneticAlgorithm():
         else:
             try:
                 tr = load(pkg_resources.resource_stream(
-                    __name__, "baseline_trace"))
+                    __name__, "baseline_trace.npy"))
                 tr.is_interpolated = False
                 return tr
             except:
@@ -286,16 +291,26 @@ class ParameterTuningGeneticAlgorithm():
                     parameter set and the baseline target objective.
         """
         individual = individual[0]
-        print("individual running")
         
-        try:
-            primary_trace = self.get_model_response(individual, self.protocol)
-        except:
-            return 100
+        primary_trace = None
 
-        if not primary_trace:
-            print("Individual errored while generating current response")
-
+        i = 1
+        while primary_trace is None:
+            primary_trace = self.get_model_response(individual,
+                                                    self.protocol)
+            if primary_trace is None:
+                print("Individual errored. Returning 5")
+                return 5
+                print(f"Individual errored {i} times while generating current response")
+                if self.previous_population is None:
+                    return 5
+                if i > 2:
+                    individual = random.choice(self.previous_population)[0]
+                else:
+                    i += 1
+                    primary_trace = None
+                    new_individual = self.toolbox.select( self.previous_population, 1)
+                    individual = new_individual[0][0]
 
         error = self.target.compare_individual(primary_trace)
 

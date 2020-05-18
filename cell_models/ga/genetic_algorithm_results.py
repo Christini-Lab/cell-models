@@ -18,6 +18,7 @@ import seaborn as sns
 
 from cell_models.ga import ga_configs
 from cell_models import paci_2018, protocols, trace
+from cell_models import kernik
 
 
 class ExtremeType(enum.Enum):
@@ -144,40 +145,41 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         baseline_trace: The baseline trace of the genetic algorithm run.
     """
 
-    def __init__(self, model, target,  config: ga_configs.ParameterTuningConfig) -> None:
+    def __init__(self, model, target, all_individuals,
+                 config: ga_configs.ParameterTuningConfig,
+                 time_conversion=1) -> None:
         super().__init__()
         self.config = config
         self.model = model
-        #self.baseline_trace = paci_2018.generate_trace(
-        #    tunable_parameters=config.tunable_parameters,
-        #    protocol=config.protocol)
-        self.baseline_trace = self.model.generate_trace(
-            tunable_parameters=config.tunable_parameters,
-            protocol=config.protocol)
-        self.target = target.target
-        if "KernikModel" in dir(model):
-            self.time_conversion = 1.0
-        else:
-            self.time_conversion = 1000.0
-
+        self.target = target
+        self.all_individuals = all_individuals
+        self.time_conversion = time_conversion
 
     def get_parameter_scales(self, individual):
         parameter_scaling = []
-        for i in range(len(self.config.tunable_parameters)):
+        parameter_names = [k.name for k in self.config.tunable_parameters]
+        for param in parameter_names:
             parameter_scaling.append(
                 individual.parameters[i] /
                 self.config.tunable_parameters[i].default_value)
+        import pdb
+        pdb.set_trace()
         return parameter_scaling
 
-    def graph_individual(self, individual, label="None"):
+    def graph_individual(self, individual, label="None", with_target=True):
         """Graphs an individual's trace."""
+        if (self.model == 'kernik') or ("KernikModel" in dir(self.model)):
+            self.model = kernik
+        self.time_conversion = 1
         trace = self.model.generate_trace(
             tunable_parameters=self.config.tunable_parameters,
             protocol=self.config.protocol,
             params=individual.parameters)
         if trace:
             if isinstance(self.config.protocol, protocols.VoltageClampProtocol):
-                trace.plot_only_currents(label=label, time_conversion=self.time_conversion)
+                trace.plot_only_currents(label="Individual", time_conversion=self.time_conversion)
+                if with_target:
+                    self.target.plot_only_currents(label="Target", time_conversion=self.time_conversion)
             else:
                 plt.plot(
                     [i * 1000 for i in trace.t],
@@ -187,6 +189,30 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         plt.xlabel('Time (ms)')
         plt.ylabel(r'$V_m$ (mV)')
         return trace
+
+    def graph_individual_param_set(self, individual, fig=None, ax=None):
+        """Graphs an individual's parameters.
+        """
+        if fig is None:
+            fig, ax = plt.subplots(figsize=(10, 8))
+
+        parameter_indices = [k.name for k in self.config.tunable_parameters]
+        params_underscore = [f'${i[0:2]}{{{i[2:]}}}$' for i in parameter_indices]
+        
+        parameter_vals = [individual.parameters[k] for k in parameter_indices]
+
+        x = parameter_indices
+        y = np.array(parameter_vals)
+        color = np.where(y >= 1, 'green', 'red')
+        #plt.vlines(x=x, ymin=1, ymax=y, color=color, alpha=0.75, linewidth=5)
+        plt.scatter(x, y, color=color, s=20, alpha=1)
+        plt.axhline(1, linewidth=0.5, linestyle='--', color='gray')
+        plt.xlabel('Parameters', fontsize=20)
+        plt.ylabel('Scaled Conductance', fontsize=20)
+        plt.xticks(parameter_indices, params_underscore)
+        plt.yticks([i for i in range(0, 11)], [i for i in range(0, 11)])
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
 
     def graph_individual_with_param_set(self, individual, title=''):
         """Graphs an individual and its parameters.
@@ -568,4 +594,3 @@ class VCOptimizationIndividual(Individual):
                 window=config.window,
                 step_size=config.step_size)
         return max_contributions['Contribution'].sum()
-

@@ -357,33 +357,32 @@ class Trace:
         ax_1.spines['top'].set_visible(False)
         plt.show()
 
-    def plot_with_currents(self, title=None):
+    def plot_with_currents(self, title=None, label=None):
         if not self.current_response_info:
             return ValueError('Trace does not have current info stored. Trace '
                               'was not generated with voltage clamp protocol.')
-        fig = plt.figure(figsize=(10, 5))
+        fig, (ax_1, ax_2) = plt.subplots(1, 2, num=1)
 
-        ax_1 = fig.add_subplot(111)
         ax_1.plot(
-            [1000 * i for i in self.t],
-            [i * 1000 for i in self.y],
+            [i for i in self.t],
+            [i for i in self.y],
             'b',
             label='Voltage')
         plt.xlabel('Time (ms)')
         plt.ylabel(r'$V_m$ (mV)')
+        
+        plt.legend()
 
-        ax_2 = fig.add_subplot(111, sharex=ax_1, frameon=False)
         ax_2.plot(
-            [1000 * i for i in self.t],
-            [i * 1000 for i in self.current_response_info.get_current_summed()],
-            'r--',
-            label='Current')
+            [i for i in self.t],
+            [i for i in self.current_response_info.get_current_summed()],
+            '--',
+            label=label)
         ax_2.yaxis.tick_right()
         ax_2.yaxis.set_label_position("right")
         plt.ylabel(r'$I_m$ (nA/nF)')
 
         ax_1.spines['top'].set_visible(False)
-        plt.show()
         if title:
             plt.title(r'{}'.format(title))
 

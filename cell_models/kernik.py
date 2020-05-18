@@ -256,7 +256,8 @@ def generate_trace(protocol, tunable_parameters=None, params=None):
     """
     new_params = dict()
     if params and tunable_parameters:
-        for i in range(len(params)):
-            new_params[tunable_parameters[i].name] = params[i]
+        for i in range(len(tunable_parameters)):
+            new_params[tunable_parameters[i].name] = params[
+                    tunable_parameters[i].name]
 
     return KernikModel(updated_parameters=new_params).generate_response(protocol)

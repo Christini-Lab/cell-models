@@ -3,6 +3,7 @@ import collections
 from typing import List
 
 from matplotlib import pyplot as plt
+from matplotlib import cm
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
@@ -152,6 +153,18 @@ class CurrentResponseInfo:
         #        current[i] = 0
         return current
 
+    def get_current(self, names):
+        currents = []
+        for i in self.currents:
+            currents.append([current.value for current in i if current.name in names])
+
+        currents = np.array(currents)
+
+        if len(names) == 1:
+            return currents[:, 0]
+
+        return currents
+
     def get_max_current_contributions(self,
                                       time: List[float],
                                       window: float,
@@ -185,7 +198,7 @@ class CurrentResponseInfo:
             step_size=step_size)
         max_contributions = collections.defaultdict(list)
         for i in list(contributions.columns.values):
-            if i in ('Time Start', 'Time End'):
+            if i in ('Time Start', 'Time End', 'Time Mid'):
                 continue
             max_contrib_window = contributions.loc[contributions[i].idxmax()]
             max_contributions['Current'].append(i)
@@ -240,6 +253,7 @@ class CurrentResponseInfo:
                 # dict.
                 current_contributions['Time Start'].append(i)
                 current_contributions['Time End'].append(i + window)
+                current_contributions['Time Mid'].append((2*i + window)/2)
 
                 for key, val in window_current_contributions.items():
                     current_contributions[key].append(val)
@@ -253,21 +267,25 @@ def find_closest_index(array, t):
 
 def calculate_current_contributions(currents: List[List[Current]]):
     """Calculates the contributions of a list of a list current time steps."""
-    current_sums = {}
-    total_sum = 0
-    for time_steps in currents:
-        for current in time_steps:
-            if current.name in current_sums:
-                current_sums[current.name] += abs(current.value)
-            else:
-                current_sums[current.name] = abs(current.value)
-            total_sum += abs(current.value)
-
     current_contributions = {}
-    for key, val in current_sums.items():
-        current_contributions[key] = val / total_sum
+
+    for time_steps in currents:
+        total_curr = sum([abs(curr.value) for curr in time_steps])
+        for current in time_steps:
+            if current.name in current_contributions:
+                current_contributions[current.name].append(
+                        abs(current.value) / total_curr)
+            else:
+                current_contributions[current.name] = [
+                        abs(current.value) / total_curr]
+
+    for key, val in current_contributions.items():
+        current_contributions[key] = sum(val)/len(val)
 
     return current_contributions
+
+
+
 
 
 class Trace:
@@ -430,10 +448,88 @@ class Trace:
 
         return error 
 
+    def plot_currents_contribution(self, current, window=75, step_size=5, 
+            title=None, saved_to=None, voltage_bounds=None):
+        current_contributions = self.current_response_info.\
+            get_current_contributions(
+                time=self.t,
+                window=window,
+                step_size=step_size)
+
+        total_current = [i for i in 
+                self.current_response_info.get_current_summed()]
+        c = []
+        for t in self.t:
+            #for each timepoint, find the closest times in 
+            #current_contributions
+            idx = current_contributions['Time Mid'].sub(t).abs().idxmin()
+            c.append(current_contributions[current].loc[idx])
 
 
+        fig, (ax_1, ax_2) = plt.subplots(2, 1, num=1, sharex=True, figsize=(12, 8))
 
 
+        ax_1.plot(
+            [i for i in self.t],
+            [i for i in self.y],
+            'b',
+            label='Voltage')
+        plt.xlabel('Time (ms)', fontsize=18)
+        plt.ylabel(r'$V_m$ (mV)', fontsize=18)
+
+        if voltage_bounds is not None:
+            ax_1.set_ylim(voltage_bounds[0], voltage_bounds[1])
+        
+        ax_im = ax_2.scatter(self.t, total_current, c=c, cmap=cm.copper, vmin=0, vmax=1)
+        plt.ylabel(r'$I_m$ (nA/nF)', fontsize=18)
+
+        fig.subplots_adjust(right=0.8)
+        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+        fig.colorbar(ax_im, cax=cbar_ax)
+
+        ax_1.spines['top'].set_visible(False)
+
+        if title is not None:
+            fig.suptitle(title)
+
+        for ax in [ax_1, ax_2]:
+            ax.tick_params(axis="x", labelsize=14)
+            ax.tick_params(axis="y", labelsize=14)
 
 
+        if saved_to is None:
+            plt.show()
+        else: 
+            plt.savefig(saved_to)
 
+    #def plot_with_concentrations(self):
+    #    if not self.current_response_info:
+    #        return ValueError('Trace does not have current info stored. Trace '
+    #                          'was not generated with voltage clamp protocol.')
+    #    fig, (ax_1, ax_2, ax_3, ax_4) = plt.subplots(1, 4, num=1)
+
+    #    ax_1.plot(
+    #        [i for i in self.t],
+    #        [i for i in self.y],
+    #        'b',
+    #        label='Voltage')
+    #    plt.xlabel('Time (ms)')
+    #    plt.ylabel(r'$V_m$ (mV)')
+    #    
+    #    plt.legend()
+
+    #    import pdb
+    #    pdb.set_trace()
+
+    #    ax_2.plot(
+    #        [i for i in self.t],
+    #        [i for i in self.current_response_info.get_current_summed()],
+    #        '--',
+    #        label=label)
+    #    ax_2.yaxis.tick_right()
+    #    ax_2.yaxis.set_label_position("right")
+    #    plt.ylabel(r'$I_m$ (nA/nF)')
+
+    #    ax_1.spines['top'].set_visible(False)
+    #    if title:
+    #        plt.title(r'{}'.format(title))

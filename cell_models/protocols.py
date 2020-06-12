@@ -2,6 +2,9 @@
 
 import bisect
 from typing import List, Union
+import random
+import numpy as np
+import matplotlib.pyplot as plt
 
 class SpontaneousProtocol:
     """Encapsulates state and behavior of a single action potential protocol."""
@@ -76,12 +79,16 @@ class IrregularPacingProtocol:
 class VoltageClampStep:
     """A step in a voltage clamp protocol."""
 
-    def __init__(self, voltage: float, duration: float) -> None:
+    def __init__(self, voltage=None, duration=None) -> None:
         self.voltage = voltage
         self.duration = duration
 
+    def set_to_random_step(self, voltage_bounds, duration_bounds):
+        self.voltage = random.uniform(*voltage_bounds)
+        self.duration = random.uniform(*duration_bounds)
+
     def __str__(self):
-        return 'Voltage: {}, Duration: {}'.format(self.voltage, self.duration)
+        return '|STEP: Voltage: {}, Duration: {}|'.format(self.voltage, self.duration)
 
     def __repr__(self):
         return self.__str__()
@@ -91,6 +98,150 @@ class VoltageClampStep:
             return False
         return (abs(self.voltage - other.voltage) < 0.001 and
                 abs(self.duration - other.duration) < 0.001)
+        
+    def mutate(self, vcga_params):
+        v_bounds = vcga_params.config.ga_config.step_voltage_bounds
+        d_bounds = vcga_params.config.ga_config.step_duration_bounds
+
+        self.voltage = mutate(v_bounds, self.voltage)
+        self.duration = mutate(d_bounds, self.duration)
+
+
+
+class VoltageClampRamp:
+    """A step in a voltage clamp protocol."""
+
+    def __init__(self, voltage_start=None, 
+                    voltage_end=None,
+                    duration=None) -> None:
+        self.voltage_start = voltage_start
+        self.voltage_end = voltage_end
+        self.duration = duration
+
+    def set_to_random_step(self, voltage_bounds, duration_bounds):
+        self.voltage_start = random.uniform(*voltage_bounds)
+        self.voltage_end = random.uniform(*voltage_bounds)
+        self.duration=random.uniform(*duration_bounds)
+
+    def __str__(self):
+        return '|RAMP: Voltage Start: {}, Voltage End: {}, Duration: {}|'.format(
+                self.voltage_start, self.voltage_end, self.duration)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return (abs(self.voltage - other.voltage) < 0.001 and
+                abs(self.duration - other.duration) < 0.001)
+
+    def get_voltage(self, time):
+        fraction_change = time / self.duration
+        voltage_change = self.voltage_end - self.voltage_start
+        return self.voltage_start + fraction_change * voltage_change 
+
+    def mutate(self, vcga_params):
+        v_bounds = vcga_params.config.ga_config.step_voltage_bounds
+        d_bounds = vcga_params.config.ga_config.step_duration_bounds
+
+        self.voltage_start = mutate(v_bounds, self.voltage_start)
+        self.voltage_end = mutate(v_bounds, self.voltage_end)
+        self.duration = mutate(d_bounds, self.duration)
+
+
+
+class VoltageClampSinusoid:
+    """A sinusoidal step in a voltage clamp protocol."""
+
+    def __init__(self, voltage_start=None,
+                    voltage_amplitude=None,
+                    voltage_frequency=None,
+                    duration=None) -> None:
+        self.voltage_start = voltage_start
+        self.amplitude = voltage_amplitude
+        self.frequency = voltage_frequency
+        self.duration = duration
+
+    def set_to_random_step(self,
+                           voltage_bounds,
+                           duration_bounds,
+                           frq_bounds=[.005, .25],
+                           amp_bounds=[5, 75]):
+        v_start = -200
+        amplitude = -200
+        while (((v_start - abs(amplitude)) < voltage_bounds[0]) or
+                ((v_start + abs(amplitude)) > voltage_bounds[1])):
+            v_start = random.uniform(*voltage_bounds)
+            amplitude = random.choice([-1, 1])*random.uniform(*amp_bounds)
+        
+        self.duration = random.uniform(*duration_bounds)
+        self.frequency = random.uniform(*frq_bounds)
+        self.voltage_start = v_start
+        self.amplitude = amplitude
+
+    def get_voltage(self, time):
+        return np.sin(
+                self.frequency*time) * self.amplitude + self.voltage_start
+
+    def __str__(self):
+        return '|SINUSOID: Voltage Start: {}, Duration: {}, Amplitude: {}, Frequency: {}|'.format(
+                self.voltage_start, self.duration, self.amplitude, self.frequency)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        return False
+        if not isinstance(other, self.__class__):
+            return False
+        return (abs(self.voltage - other.voltage) < 0.001 and
+                abs(self.duration - other.duration) < 0.001)
+
+
+    def mutate(self, vcga_params, frq_bounds=[.005, .25]):
+        v_bounds = vcga_params.config.ga_config.step_voltage_bounds
+        d_bounds = vcga_params.config.ga_config.step_duration_bounds
+
+        self.duration = mutate(d_bounds, self.duration)
+        self.frequency = mutate(frq_bounds, self.frequency)
+
+        v_start = self.voltage_start
+        amplitude = self.amplitude
+
+        while (((v_start - abs(amplitude)) < v_bounds[0]) or
+                ((v_start + abs(amplitude)) > v_bounds[1])):
+            v_offset = np.random.normal(
+                loc=0,
+                scale=abs(v_bounds[0] - v_bounds[1]) / 20)
+            a_offset = np.random.normal(
+                loc=0,
+                scale=abs(v_bounds[0] - v_bounds[1]) / 20)
+            v_start += v_offset
+            amplitude += a_offset
+
+        self.voltage_start = v_start
+        self.amplitude = amplitude
+
+
+def mutate(bounds, value, normal_denom=20):
+        new_val_offset = np.random.normal(
+            loc=0,
+            scale=abs(bounds[0] - bounds[1]) / normal_denom)
+
+        new_value = value + new_val_offset
+        while ((new_value > bounds[1]) or
+               (new_value < bounds[0])):
+            new_val_offset = np.random.normal(
+                loc=0,
+                scale=abs(bounds[0] - bounds[1]) / normal_denom)
+            new_value = value + new_val_offset
+
+        return new_value
+
+
+
+
 
 class VoltageClampProtocol:
     """Encapsulates state and behavior of a voltage clamp protocol."""
@@ -164,14 +315,55 @@ class VoltageClampProtocol:
             voltage_change_endpoints.append(cumulative_time)
         return voltage_change_endpoints
 
+    def get_voltage_change_startpoints(self):
+        voltage_change_endpoints = [0]
+        cumulative_time = 0
+        for i in self.steps[0:-1]:
+            cumulative_time += i.duration
+            voltage_change_endpoints.append(cumulative_time)
+        return voltage_change_endpoints
+
     def get_voltage_at_time(self, time: float) -> float:
         """Gets the voltage based on provided steps for the specified time."""
         step_index = bisect.bisect_left(
             self.get_voltage_change_endpoints(),
             time)
         if step_index != len(self.get_voltage_change_endpoints()):
-            return self.steps[step_index].voltage
+            current_step = self.steps[step_index]
+            time_into_step = time - self.get_voltage_change_startpoints()[
+                    step_index]
+
+            if isinstance(current_step, VoltageClampStep):
+                return current_step.voltage
+            elif isinstance(current_step, VoltageClampRamp):
+                return current_step.get_voltage(time_into_step)
+            else:
+                return current_step.get_voltage(time_into_step)
+
         raise ValueError('End of voltage protocol.')
+
+    def plot_voltage_clamp_protocol(self):
+        duration = self.get_voltage_change_endpoints()[-1]
+
+        times = np.arange(0, duration, 1)
+
+        voltages = []
+
+        for t in times:
+            voltages.append(self.get_voltage_at_time(t))
+
+        plt.figure(figsize=(12, 7))
+        ax = plt.subplot()
+        plt.plot(times, voltages)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        plt.xlabel("Time (ms)", fontsize=18)
+        plt.ylabel("Voltages (mV)", fontsize=18)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+
+        plt.show()
+
 
 
 PROTOCOL_TYPE = Union[

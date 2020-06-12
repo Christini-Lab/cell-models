@@ -112,10 +112,14 @@ class KernikModel(CellModel):
 
         d_y = np.zeros(23)
 
-
         # --------------------------------------------------------------------
         # Reversal Potentials:
-        E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
+        try:
+            E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
+        except ValueError:
+            print(f'Intracellular Calcium went negative at time {t}')
+            y[2] = 4.88E-5
+            E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
         E_Na = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Nao / y[3])  # millivolt
         E_K = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Ko / y[4])  # millivolt
 
@@ -172,7 +176,7 @@ class KernikModel(CellModel):
         # Concentration Changes:
         d_y[1] = self.kernik_currents.Ca_SR_conc(y[1], i_up, i_rel, i_leak)
 
-        d_y[2] = self.kernik_currents.Cai_conc(y[2], i_leak, i_up, i_rel, d_y[5],
+        d_y[2] = self.kernik_currents.Cai_conc(y[2], i_leak, i_up, i_rel, 
                                          i_CaL_Ca, i_CaT, i_b_Ca,
                                          i_PCa, i_NaCa, self.cm_farad)
 

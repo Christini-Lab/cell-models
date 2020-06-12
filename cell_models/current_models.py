@@ -194,7 +194,9 @@ class KernikCurrents():
         # from Ten tusscher 2004
         scale_Ical_Fca_Cadep = 1.2
         alpha_fCa = 1.0/(1.0+((scale_Ical_Fca_Cadep*Cai)/.000325) ** 8.0)
+
         beta_fCa = 0.1/(1.0+exp((scale_Ical_Fca_Cadep*Cai-.0005)/0.0001))
+
         gamma_fCa = .2/(1.0+exp((scale_Ical_Fca_Cadep*Cai-0.00075)/0.0008))
 
         fCa_inf = ((alpha_fCa+beta_fCa+gamma_fCa+.23)/(1.46))
@@ -441,7 +443,7 @@ class KernikCurrents():
 
         return d_Ca_SR
 
-    def Cai_conc(self, Cai, i_leak, i_up, i_rel, d_Ca_ligand, i_CaL_Ca, i_CaT, 
+    def Cai_conc(self, Cai, i_leak, i_up, i_rel, i_CaL_Ca, i_CaT, 
                  i_b_Ca, i_PCa, i_NaCa, Cm):
         # 3: Cai (millimolar)
         # rapid equilibrium approximation equations --
@@ -450,7 +452,8 @@ class KernikCurrents():
         Kbuf_C = .0006  # millimolar (in calcium_dynamics)
         Cai_bufc = 1/(1.0+Buf_C*Kbuf_C/(Cai+Kbuf_C)**2.0)
 
-        d_Cai = (Cai_bufc)*(i_leak-i_up+i_rel- d_Ca_ligand -
+
+        d_Cai = (Cai_bufc)*(i_leak-i_up+i_rel - 
                 (i_CaL_Ca+i_CaT+i_b_Ca+i_PCa-2*i_NaCa)*Cm/(2.0*self.Vc*self.f_coulomb_per_mmole))
 
         return d_Cai

@@ -19,6 +19,7 @@ import copy
 from multiprocessing import Pool
 from os import environ
 import pkg_resources
+import matplotlib.pyplot as plt
 
 from cell_models.kernik import KernikModel
 from cell_models import kernik
@@ -84,28 +85,16 @@ def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
 
     if not is_baseline:
         print("Taking random trace with index 5")
-        try:
-            tr = load(pkg_resources.resource_stream(
-                __name__, "random5_trace.npy"))
-            tr.is_interpolated = False
+        random_ss = np.load(pkg_resources.resource_stream(
+            __name__, "models_at_ss.npy"), allow_pickle=True)
 
-            random_ss = np.load(pkg_resources.resource_stream(
-                __name__, "models_at_ss.npy"), allow_pickle=True)
+        index = 5
 
-            index = 5
-            ga_params.vc_config.taret_params = random_ss[index]
-            return tr
-        except:
-            random_ss = np.load(pkg_resources.resource_stream(
-                __name__, "models_at_ss.npy"), allow_pickle=True)
+        target_cell = ga_params.cell_model(
+            updated_parameters=random_ss[index][0])
 
-            index = 5
-
-            target_cell = ga_params.cell_model(
-                updated_parameters=random_ss[index][0])
-
-            target_cell.y_initial = random_ss[index][1]
-            target_cell.y_ss = random_ss[index][1]
+        target_cell.y_initial = random_ss[index][1]
+        target_cell.y_ss = random_ss[index][1]
 
     else:
         try:
@@ -206,8 +195,7 @@ def run_ga(ga_params, toolbox):
 
         generate_statistics(population)
     
-    #final_ga_results = genetic_algorithm_results.GeneticAlgorithmResult(
-    final_ga_results = genetic_algorithm_results.GAResultParameterTuning( 
+    final_ga_results = genetic_algorithm_results.GAResultParameterTuning(
             'kernik', TARGET, final_population, GA_PARAMS.vc_config)
 
     return final_ga_results
@@ -400,6 +388,3 @@ def start_ga(kernik_protocol, vc_config, is_baseline=True):
     final_population = run_ga(GA_PARAMS, toolbox)
 
     return final_population
-
-if __name__ == '__main__':
-    main()

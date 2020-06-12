@@ -35,10 +35,10 @@ class GeneticAlgorithmResult(ABC):
         generations: A 2D list of every individual in the genetic algorithm.
     """
 
-    def __init__(self):
+    def __init__(self, generations):
         self.config = None
         self.baseline_trace = None
-        self.generations = []
+        self.generations = generations
 
     def get_individual(self, generation, index):
         """Returns the individual at generation and index specified."""
@@ -148,7 +148,7 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
     def __init__(self, model, target, all_individuals,
                  config: ga_configs.ParameterTuningConfig,
                  time_conversion=1) -> None:
-        super().__init__()
+        super().__init__(all_individuals)
         self.config = config
         self.model = model
         self.target = target
@@ -321,9 +321,11 @@ class GAResultVoltageClampOptimization(GeneticAlgorithmResult):
         config: The config object used in the genetic algorithm run.
     """
 
-    def __init__(self, config: ga_configs.VoltageOptimizationConfig) -> None:
-        super().__init__()
+    def __init__(self, config: ga_configs.VoltageOptimizationConfig,
+            current, generations) -> None:
+        super().__init__(generations)
         self.config = config
+        self.current = current
 
     def generate_heatmap(self):
         """Generates a heatmap showing error of individuals."""
@@ -558,7 +560,8 @@ class VCOptimizationIndividual(Individual):
 
     def __init__(self,
                  protocol: protocols.VoltageClampProtocol,
-                 fitness: float=0.0) -> None:
+                 fitness: float=0.0,
+                 model=kernik) -> None:
         super().__init__(fitness=fitness)
         self.protocol = protocol
 
@@ -578,12 +581,12 @@ class VCOptimizationIndividual(Individual):
     def __lt__(self, other):
         return self.fitness < other.fitness
 
-    def evaluate(self, config: ga_configs.VoltageOptimizationConfig) -> int:
+    def evaluate(self, config: ga_configs.VoltageOptimizationConfig, 
+            prestep=5000) -> int:
         """Evaluates the fitness of the individual."""
-        #i_trace = paci_2018.PaciModel().generate_response(
-        #    protocol=self.protocol)
-        i_trace = self.model.KernikModel().generate_response(
-            protocol=self.protocol)
+        i_trace = get_model_response(
+                kernik.KernikModel(), self.protocol, prestep=prestep)
+        #i_trace = kernik.KernikModel().generate_response(protocol=self.protocol)
 
         if not i_trace:
             return 0
@@ -593,4 +596,45 @@ class VCOptimizationIndividual(Individual):
                 time=i_trace.t,
                 window=config.window,
                 step_size=config.step_size)
-        return max_contributions['Contribution'].sum()
+
+        return max_contributions
+
+def get_model_response(model, protocol, prestep):
+    """
+    Parameters
+    ----------
+    model : CellModel
+        This can be a Kernik, Paci, or OR model instance
+    protocol : VoltageClampProtocol
+        This can be any VoltageClampProtocol
+
+    Returns
+    -------
+    trace : Trace
+        Trace object with the current and voltage data during the protocol
+
+    Accepts a model object, applies  a -80mV holding prestep, and then 
+    applies the protocol. The function returns a trace object with the 
+    recording during the input protocol.
+    """
+    if prestep == 5000:
+        model.y_ss = [-8.00000000e+01,  3.21216155e-01,  4.91020485e-05,  
+                      7.17831342e+00, 1.04739792e+02,  0.00000000e+00,  
+                      2.08676499e-04,  9.98304915e-01, 1.00650102e+00,  
+                      2.54947318e-04,  5.00272640e-01,  4.88514544e-02, 
+                      8.37710905e-01,  8.37682940e-01,  1.72812888e-02,  
+                      1.12139759e-01, 9.89533019e-01,  1.79477762e-04,  
+                      1.29720330e-04,  9.63309509e-01, 5.37483590e-02,  
+                      3.60848821e-05,  6.34831828e-04]
+    else:
+        prestep_protocol = protocols.VoltageClampProtocol(
+            [protocols.VoltageClampStep(voltage=-80.0,
+                                        duration=prestep)])
+
+        model.generate_response(prestep_protocol)
+
+        model.y_ss = model.y[:, -1]
+
+    response_trace = model.generate_response(protocol)
+
+    return response_trace

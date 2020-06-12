@@ -171,7 +171,8 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
                  gene_swap_probability: float,
                  gene_mutation_probability: float,
                  tournament_size: int,
-                 target_currents: List[str] = None):
+                 target_current: str = None,
+                 step_types = ["step", "ramp", "sinusoid"]):
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -185,7 +186,8 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
         self.steps_in_protocol = steps_in_protocol
         self.step_duration_bounds = step_duration_bounds
         self.step_voltage_bounds = step_voltage_bounds
-        self.target_currents = target_currents
+        self.target_current = target_current
+        self.step_types = step_types
 
 
 class CombinedVCConfig:

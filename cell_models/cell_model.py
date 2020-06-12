@@ -305,7 +305,7 @@ class CellModel:
 
             self.calc_currents()
         except:
-            print("There was a math domain error in the diff eq evaluation")
+            print("There was an error")
             return None
 
 

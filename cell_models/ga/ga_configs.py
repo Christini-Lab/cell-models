@@ -99,7 +99,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
     VC_MAX_ERROR = 130
 
     def __init__(self,
-                 protocol: protocols.PROTOCOL_TYPE,
+                 protocols,
                  params_lower_bound: float,
                  params_upper_bound: float,
                  tunable_parameters: List[Parameter],
@@ -120,7 +120,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
             gene_swap_probability=gene_swap_probability,
             gene_mutation_probability=gene_mutation_probability,
             tournament_size=tournament_size)
-        self.protocol = protocol
+        self.protocols = protocols
         self.params_lower_bound = params_lower_bound
         self.params_upper_bound = params_upper_bound
         self.tunable_parameters = tunable_parameters

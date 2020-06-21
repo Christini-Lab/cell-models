@@ -115,9 +115,10 @@ class KernikModel(CellModel):
         # --------------------------------------------------------------------
         # Reversal Potentials:
         try:
-            E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
+            E_Ca = (0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / 
+                    self.f_coulomb_per_mmole * log(self.Cao / y[2]))  # millivolt
         except ValueError:
-            print(f'Intracellular Calcium went negative at time {t}')
+            print(f'Intracellular Calcium calcium negative at time {t}')
             y[2] = 4.88E-5
             E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
         E_Na = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Nao / y[3])  # millivolt

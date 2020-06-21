@@ -427,6 +427,7 @@ class Trace:
 
     def compare_individual(self, individual):
         if individual is None:
+            print("Returning 100")
             return 100
         if not self.is_interpolated:
             self.interp_time = np.linspace(self.t[0], self.t[-1], int(
@@ -444,9 +445,9 @@ class Trace:
 
         individual_current = f(self.interp_time)
 
-        error = np.log10(sum(abs(self.interp_current - individual_current)))
+        error = sum(abs(self.interp_current - individual_current))
 
-        return error 
+        return error
 
     def plot_currents_contribution(self, current, window=75, step_size=5, 
             title=None, saved_to=None, voltage_bounds=None):

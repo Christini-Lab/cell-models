@@ -290,23 +290,23 @@ class CellModel:
         self.current_response_info = trace.CurrentResponseInfo(
             protocol=protocol)
 
-        try:
-            solution = integrate.solve_ivp(
-                self.generate_voltage_clamp_function(protocol),
-                [0, protocol.get_voltage_change_endpoints()[-1]],
-                y_init,
-                method='BDF',
-                max_step=1e-3*self.time_conversion)
+        #try:
+        solution = integrate.solve_ivp(
+            self.generate_voltage_clamp_function(protocol),
+            [0, protocol.get_voltage_change_endpoints()[-1]],
+            y_init,
+            method='BDF',
+            max_step=1e-3*self.time_conversion)
 
-            self.t = solution.t
-            self.y = solution.y
-            #self.y_initial = self.y[:,-1]
-            self.y_voltage = solution.y[self.default_voltage_position,:]
+        self.t = solution.t
+        self.y = solution.y
+        #self.y_initial = self.y[:,-1]
+        self.y_voltage = solution.y[self.default_voltage_position,:]
 
-            self.calc_currents()
-        except:
-            print("There was an error")
-            return None
+        self.calc_currents()
+        #except:
+        #    print("There was an error")
+        #    return None
 
 
 

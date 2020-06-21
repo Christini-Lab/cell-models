@@ -195,7 +195,15 @@ class KernikCurrents():
         scale_Ical_Fca_Cadep = 1.2
         alpha_fCa = 1.0/(1.0+((scale_Ical_Fca_Cadep*Cai)/.000325) ** 8.0)
 
-        beta_fCa = 0.1/(1.0+exp((scale_Ical_Fca_Cadep*Cai-.0005)/0.0001))
+        try:
+            beta_fCa = 0.1/(1.0+exp((scale_Ical_Fca_Cadep*Cai-.0005)/0.0001))
+        except OverflowError:
+            beta_fCa_exp = (scale_Ical_Fca_Cadep*Cai-.0005)/0.0001
+
+            if beta_fCa_exp > 50:
+                beta_fCa = 0
+            else:
+                beta_fCa = 0.1
 
         gamma_fCa = .2/(1.0+exp((scale_Ical_Fca_Cadep*Cai-0.00075)/0.0008))
 

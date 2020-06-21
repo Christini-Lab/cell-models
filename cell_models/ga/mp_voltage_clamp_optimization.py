@@ -218,7 +218,6 @@ def start_ga(vco_config):
 
 
 def generate_statistics(population):
-    fitness_values = [i.fitness.values[0] for i in population]
     print('\t\tMin fitness: {}'.format(min(fitness_values)))
     print('\t\tMax fitness: {}'.format(max(fitness_values)))
     print('\t\tAverage fitness: {}'.format(np.mean(fitness_values)))

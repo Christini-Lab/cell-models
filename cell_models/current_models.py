@@ -504,6 +504,119 @@ class Ishi():
 
         return [I_K1, y1]
 
+
+class SimplifiedExperimentalArtefacts():
+    """
+    Experimental artefacts from Lei 2020
+    For a cell model that includes experimental artefacts, you need to track
+    three additional differential parameters: 
+
+    The undetermined variables are: v_off, g_leak, e_leak
+    Given the simplified model in section 4c, 
+    you can make assumptions that allow you to reduce the undetermined
+    variables to only:
+        v_off_dagger – mostly from liquid-junction potential
+        g_leak_dagger
+        e_leak_dagger (should be zero)
+    """
+    def __init__(self, r_pipette, c_m, alpha):
+        """
+        Parameters:
+            Experimental measures:
+                r_pipette – series resistance of the pipette
+                c_m – capacitance of the membrane
+            Clamp settings
+                alpha – requested proportion of series resistance compensation
+        """
+        self.r_pipette = r_pipette
+        self.c_m = c_m
+        self.alpha = alpha
+
+    def dvm_dt(self, g_leak, e_leak, v_off, i_ion, v_cmd, v_m):
+        i_leak = self.get_i_leak(g_leak, v_m, e_leak)
+        i_out = i_ion + i_leak
+
+        v_p = self.get_v_pipette(v_cmd, i_out)
+
+        dvm_dt = ((1/(self.r_pipette*self.c_m))*(v_p + v_off-v_m) -
+                  i_out/self.c_m)
+
+        return dvm_dt
+
+    def get_i_leak(self, g_leak, e_leak, v_m):
+        return g_leak * (v_m - e_leak)
+
+    def get_v_pipette(self, v_cmd, i_out):
+        v_p = v_cmd + self.alpha * self.r_pipette * i_out
+
+        return v_p
+
+
+class ExperimentalArtefacts():
+    """
+    Experimental artefacts from Lei 2020
+    For a cell model that includes experimental artefacts, you need to track
+    three additional differential parameters: 
+
+    The undetermined variables are: v_off, g_leak, e_leak
+    Given the simplified model in section 4c, 
+    you can make assumptions that allow you to reduce the undetermined
+    variables to only:
+        v_off_dagger – mostly from liquid-junction potential
+        g_leak_dagger
+        e_leak_dagger (should be zero)
+    """
+    def __init__(self, alpha=.75, tau_clamp=.8E-3, tau_sum=20E-3, tau_z=7.5E-3):
+        """
+        Parameters:
+            Experimental measures:
+                r_pipette – series resistance of the pipette
+                c_m – capacitance of the membrane
+            Clamp settings
+                alpha – requested proportion of series resistance compensation
+        """
+        self.alpha = alpha
+        self.tau_clamp = tau_clamp
+        self.tau_sum = tau_sum
+        self.tau_z = tau_z
+
+    def get_dvm_dt(self, g_leak, e_leak, c_m, v_off,
+                   r_s, v_p, v_m, i_ion, i_leak):
+        dvm_dt = ((1/(r_s*c_m)) * (v_p + v_off - v_m) - (1/c_m) *
+                  (i_ion + i_leak))
+
+        return dvm_dt
+
+    def get_i_leak(self, g_leak, e_leak, v_m):
+        return g_leak * (v_m - e_leak)
+    
+    def get_dvp_dt(self, v_clamp, v_p):
+        return (1/self.tau_clamp)*(v_clamp - v_p)
+    
+    def get_dvclamp_dt(self, tau_sum, v_cmd, r_s_star, i_out, v_clamp):
+        return ((1/tau_sum)*((v_cmd + self.alpha *
+                              r_s_star * i_out) - v_clamp))
+
+    def get_i_in(self, i_ion, i_leak, c_p, dvp_dt, c_p_star, dvclamp_dt,
+                 c_m, c_m_star, dvm_dt):
+        i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+        i_cm = c_m * dvm_dt - c_m_star * dvclamp_dt
+
+        return i_ion + i_leak + i_cp + i_cm
+
+    def get_diout_dt(self, i_in, i_out):
+        return (1/self.tau_z) * (i_in - i_out)
+
+
+    def get_v_pipette(self, v_cmd, i_out):
+        v_p = v_cmd + self.alpha * self.r_pipette * i_out
+
+        return v_p
+
+
+
+
+
 def kernik_model_inputs():
     return np.array([
         1.000000000000000000e+00, 1.000000000000000000e+00

@@ -2,7 +2,7 @@ from math import log, sqrt
 from typing import List
 
 from cell_models.cell_model import CellModel
-from cell_models.current_models import KernikCurrents, Ishi
+from cell_models.current_models import KernikCurrents, Ishi, ExperimentalArtefacts
 
 import numpy as np
 from scipy import integrate
@@ -39,12 +39,14 @@ class KernikModel(CellModel):
                  default_time_unit='ms', 
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
-                                        'Nai': 3, 'Ki': 4}
+                                        'Nai': 3, 'Ki': 4},
+                 with_exp_artefacts=False
                  ):
 
         self.kernik_currents = KernikCurrents(self.t_kelvin,
                                               self.f_coulomb_per_mmole, 
                                               self.r_joule_per_mole_kelvin)
+        self.with_exp_artefacts = with_exp_artefacts
 
         default_parameters = {
             'G_K1': 1,
@@ -67,6 +69,18 @@ class KernikModel(CellModel):
         }
 
         y_initial = kernik_model_initial()
+
+        #if with_exp_artefacts:
+        #    #TODO Fill in with real values
+        #    self.exp_artefacts = ExperimentalArtefacts(10E3,
+        #                                               self.cm_farad, .75)
+        #    g_leak = 1/5E6 #1/ohms
+        #    e_leak = 5 #mV
+        #    v_off = 10 #mV
+
+        #    self.artefact_parameters = {'g_leak': g_leak,
+        #                                'e_leak': e_leak,
+        #                                'v_off': v_off}
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
@@ -108,6 +122,7 @@ class KernikModel(CellModel):
         # 20: R (in Irel)
         # 21: O (in Irel)
         # 22: I (in Irel)
+        # 23: V_command
         """
 
         d_y = np.zeros(23)

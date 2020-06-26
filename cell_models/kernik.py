@@ -22,7 +22,7 @@ class KernikModel(CellModel):
         updated_parameters: A dict containing all parameters that are being
             tuned.
     """
-    cm_farad = 60
+    cm_pfarad = 60
 
     # Constants
     t_kelvin = 310.0  
@@ -40,13 +40,12 @@ class KernikModel(CellModel):
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
                                         'Nai': 3, 'Ki': 4},
-                 with_exp_artefacts=False
+                 is_exp_artefact=False
                  ):
 
         self.kernik_currents = KernikCurrents(self.t_kelvin,
                                               self.f_coulomb_per_mmole, 
                                               self.r_joule_per_mole_kelvin)
-        self.with_exp_artefacts = with_exp_artefacts
 
         default_parameters = {
             'G_K1': 1,
@@ -70,24 +69,79 @@ class KernikModel(CellModel):
 
         y_initial = kernik_model_initial()
 
-        #if with_exp_artefacts:
-        #    #TODO Fill in with real values
-        #    self.exp_artefacts = ExperimentalArtefacts(10E3,
-        #                                               self.cm_farad, .75)
-        #    g_leak = 1/5E6 #1/ohms
-        #    e_leak = 5 #mV
-        #    v_off = 10 #mV
+        if is_exp_artefact:
+            """
+            differential equations for Kernik iPSC-CM model
+            solved by ODE15s in main_ipsc.m
 
-        #    self.artefact_parameters = {'g_leak': g_leak,
-        #                                'e_leak': e_leak,
-        #                                'v_off': v_off}
+            # State variable definitions:
+            # 0: Vm (millivolt)
+
+            # Ionic Flux: ---------------------------------------------------------
+            # 1: Ca_SR (millimolar)
+            # 2: Cai (millimolar)
+            # 3: Nai (millimolar)
+            # 4: Ki (millimolar)
+
+            # Current Gating (dimensionless):--------------------------------------
+            # 5: y1    (I_K1 Ishihara)
+            # 6: d     (activation in i_CaL)
+            # 7: f1    (inactivation in i_CaL)
+            # 8: fCa   (calcium-dependent inactivation in i_CaL)
+            # 9: Xr1   (activation in i_Kr)
+            # 10: Xr2  (inactivation in i_Kr
+            # 11: Xs   (activation in i_Ks)
+            # 12: h    (inactivation in i_Na)
+            # 13: j    (slow inactivation in i_Na)
+            # 14: m    (activation in i_Na)
+            # 15: Xf   (inactivation in i_f)
+            # 16: s    (inactivation in i_to)
+            # 17: r    (activation in i_to)
+            # 18: dCaT (activation in i_CaT)
+            # 19: fCaT (inactivation in i_CaT)
+            # 20: R (in Irel)
+            # 21: O (in Irel)
+            # 22: I (in Irel)
+
+            # With experimental artefact --------------------------------------
+            # 23: Vp (millivolt)
+            # 24: Vclamp (millivolt)
+            # 25: Iout (nA)
+            # 26: Vcmd (millivolt)
+            """
+            self.exp_artefacts = ExperimentalArtefacts()
+
+            g_leak = 1/6 #1/Gohms
+            e_leak = 0 #mV
+            v_off = 5 #mV
+            c_p = 4 #pf
+            r_pipette = 10E-3 #Gohms
+            c_m = 60 # pf
+
+            self.artefact_parameters = {'g_leak': g_leak,
+                                        'e_leak': e_leak,
+                                        'v_off': v_off,
+                                        'c_p': c_p,
+                                        'r_pipette': r_pipette,
+                                        'c_m': c_m}
+
+            v_p_initial = 100 #mV
+            v_clamp_initial = 100 #mV
+            i_out_initial = 1
+            v_cmd_initial = -80 #mV
+
+            y_initial = np.append(y_initial, v_p_initial)
+            y_initial = np.append(y_initial, v_clamp_initial)
+            y_initial = np.append(y_initial, i_out_initial)
+            y_initial = np.append(y_initial, v_cmd_initial)
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
                          updated_parameters,
                          no_ion_selective_dict,
                          default_time_unit,
-                         default_voltage_unit)
+                         default_voltage_unit, 
+                         is_exp_artefact=is_exp_artefact)
 
     def action_potential_diff_eq(self, t, y):
         """
@@ -122,10 +176,12 @@ class KernikModel(CellModel):
         # 20: R (in Irel)
         # 21: O (in Irel)
         # 22: I (in Irel)
-        # 23: V_command
         """
 
-        d_y = np.zeros(23)
+        if self.is_exp_artefact:
+            d_y = np.zeros(27)
+        else:
+            d_y = np.zeros(23)
 
         # --------------------------------------------------------------------
         # Reversal Potentials:
@@ -194,12 +250,12 @@ class KernikModel(CellModel):
 
         d_y[2] = self.kernik_currents.Cai_conc(y[2], i_leak, i_up, i_rel, 
                                          i_CaL_Ca, i_CaT, i_b_Ca,
-                                         i_PCa, i_NaCa, self.cm_farad)
+                                         i_PCa, i_NaCa, self.cm_pfarad)
 
         d_y[3] = self.kernik_currents.Nai_conc(i_Na, i_b_Na, i_fNa, i_NaK, i_NaCa, 
-                                         i_CaL_Na, self.cm_farad, t)
+                                         i_CaL_Na, self.cm_pfarad, t)
 
-        #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK, 
+        #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK,
         #                                i_NaK, i_CaL_K, self.cm_farad)
         d_y[4] = -d_y[3]
 
@@ -230,34 +286,144 @@ class KernikModel(CellModel):
                 else:
                     i_no_ion += scale * current_dictionary[curr_name]
 
+        # -------------------------------------------------------------------
+        # Experimental Artefact
+        if self.is_exp_artefact:
+            is_simple = True 
+
+            if is_simple:
+                ### Simple
+                i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
+                    i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+                          i_PCa+i_f+i_b_Na+i_b_Ca +
+                          i_K1_ishi + i_no_ion) + self.i_stimulation)
+
+                i_seal_leak = self.exp_artefacts.get_i_leak(
+                        self.artefact_parameters['g_leak'],
+                        self.artefact_parameters['e_leak'], y[0])
+
+                i_out = i_ion + i_seal_leak
+
+                v_p = y[26] + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out
+
+                dvm_dt = self.exp_artefacts.get_dvm_dt(
+                        self.artefact_parameters['c_m'], 
+                        self.artefact_parameters['v_off'],
+                        self.artefact_parameters['r_pipette'],
+                        v_p, y[0], i_ion, i_seal_leak)
+
+                i_ion = i_ion / self.exp_artefacts.c_m_star
+                i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
+                i_out = i_out/ self.exp_artefacts.c_m_star
+                i_cm = 0
+                i_cp = 0
+                i_in = 0
+
+                d_y[0] = dvm_dt
+            else:
+                ### Not Simple
+                i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
+                    i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+                          i_PCa+i_f+i_b_Na+i_b_Ca +
+                          i_K1_ishi + i_no_ion) + self.i_stimulation)
+
+                i_seal_leak = self.exp_artefacts.get_i_leak(
+                        self.artefact_parameters['g_leak'],
+                        self.artefact_parameters['e_leak'], y[0])
+
+                #i_out = i_ion + i_seal_leak
+
+                dvp_dt = self.exp_artefacts.get_dvp_dt(y[24], y[23])
+
+                dvclamp_dt = self.exp_artefacts.get_dvclamp_dt(y[26], 
+                        self.artefact_parameters['r_pipette'], y[25], y[24])
+
+                dvm_dt = self.exp_artefacts.get_dvm_dt(
+                        self.artefact_parameters['c_m'],    
+                        self.artefact_parameters['v_off'],
+                        self.artefact_parameters['r_pipette'],
+                        y[23], y[0], i_ion, i_seal_leak)
+
+                i_in, i_cp, i_cm = self.exp_artefacts.get_i_in(i_ion, i_seal_leak,
+                                                   self.artefact_parameters['c_p'],
+                                                   dvp_dt, dvclamp_dt,
+                                                   self.artefact_parameters['c_m'],
+                                                   dvm_dt)
+
+                diout_dt = self.exp_artefacts.get_diout_dt(i_in, y[25])
+
+                d_y[0] = dvm_dt
+                d_y[23] = dvp_dt
+                d_y[24] = dvclamp_dt
+                d_y[25] = diout_dt
+
+                i_ion = i_ion / self.exp_artefacts.c_m_star
+                i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
+                i_out = y[25]/ self.exp_artefacts.c_m_star
+                i_cm = i_cm / self.exp_artefacts.c_m_star
+                i_cp = i_cp / self.exp_artefacts.c_m_star
+                i_in = i_in / self.exp_artefacts.c_m_star 
+
+                d_y[0] = dvm_dt
+                d_y[23] = dvp_dt
+                d_y[24] = dvclamp_dt
+                d_y[25] = diout_dt
+
+
+
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_Kr),
+                    trace.Current(name='I_Ks', value=i_Ks),
+                    trace.Current(name='I_CaL', value=i_CaL_Ca),
+                    trace.Current(name='I_NaK', value=i_NaK),
+                    trace.Current(name='I_Na', value=i_Na),
+                    trace.Current(name='I_NaCa', value=i_NaCa),
+                    trace.Current(name='I_pCa', value=i_PCa),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_Na),
+                    trace.Current(name='I_bCa', value=i_b_Ca),
+                    trace.Current(name='I_CaT', value=i_CaT),
+                    trace.Current(name='I_up', value=i_up),
+                    trace.Current(name='I_leak', value=i_leak),
+                    trace.Current(name='I_ion', value=i_ion),
+                    trace.Current(name='I_seal_leak', value=i_seal_leak),
+                    trace.Current(name='I_out', value=i_out),
+                    trace.Current(name='I_Cm', value=i_cm),
+                    trace.Current(name='I_Cp', value=i_cp),
+                    trace.Current(name='I_in', value=i_in)
+                ]
+                self.current_response_info.currents.append(current_timestep)
 
         # --------------------------------------------------------------------
-        # Calculate change in Voltage and Save currents 
-        d_y[0] = -(i_K1+i_to+i_Kr+i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
-                   i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) + self.i_stimulation
+        # Calculate change in Voltage and Save currents
+        else:
+            d_y[0] = -(i_K1+i_to+i_Kr+i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+                       i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) + self.i_stimulation
 
-        if self.current_response_info:
-            current_timestep = [
-                trace.Current(name='I_K1', value=i_K1),
-                trace.Current(name='I_To', value=i_to),
-                trace.Current(name='I_Kr', value=i_Kr),
-                trace.Current(name='I_Ks', value=i_Ks),
-                trace.Current(name='I_CaL', value=i_CaL_Ca),
-                trace.Current(name='I_NaK', value=i_NaK),
-                trace.Current(name='I_Na', value=i_Na),
-                trace.Current(name='I_NaCa', value=i_NaCa),
-                trace.Current(name='I_pCa', value=i_PCa),
-                trace.Current(name='I_F', value=i_f),
-                trace.Current(name='I_bNa', value=i_b_Na),
-                trace.Current(name='I_bCa', value=i_b_Ca),
-                trace.Current(name='I_CaT', value=i_CaT),
-                trace.Current(name='I_up', value=i_up),
-                trace.Current(name='I_leak', value=i_leak)
-            ]
-            self.current_response_info.currents.append(current_timestep)
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_Kr),
+                    trace.Current(name='I_Ks', value=i_Ks),
+                    trace.Current(name='I_CaL', value=i_CaL_Ca),
+                    trace.Current(name='I_NaK', value=i_NaK),
+                    trace.Current(name='I_Na', value=i_Na),
+                    trace.Current(name='I_NaCa', value=i_NaCa),
+                    trace.Current(name='I_pCa', value=i_PCa),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_Na),
+                    trace.Current(name='I_bCa', value=i_b_Ca),
+                    trace.Current(name='I_CaT', value=i_CaT),
+                    trace.Current(name='I_up', value=i_up),
+                    trace.Current(name='I_leak', value=i_leak)
+                ]
+                self.current_response_info.currents.append(current_timestep)
 
         return d_y
-
 
 def generate_trace(protocol, tunable_parameters=None, params=None):
     """Generates a trace.

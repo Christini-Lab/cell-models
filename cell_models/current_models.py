@@ -559,14 +559,15 @@ class ExperimentalArtefacts():
     three additional differential parameters: 
 
     The undetermined variables are: v_off, g_leak, e_leak
-    Given the simplified model in section 4c, 
+    Given the simplified model in section 4c,
     you can make assumptions that allow you to reduce the undetermined
     variables to only:
         v_off_dagger – mostly from liquid-junction potential
         g_leak_dagger
         e_leak_dagger (should be zero)
     """
-    def __init__(self, alpha=.75, tau_clamp=.8E-3, tau_sum=20E-3, tau_z=7.5E-3):
+    def __init__(self, alpha=.85, tau_clamp=.8E-3, tau_sum=20E-3, 
+                 tau_z=7.5E-3, c_p_star=4, c_m_star=60):
         """
         Parameters:
             Experimental measures:
@@ -579,9 +580,14 @@ class ExperimentalArtefacts():
         self.tau_clamp = tau_clamp
         self.tau_sum = tau_sum
         self.tau_z = tau_z
+        self.c_p_star = c_p_star
+        self.c_m_star = c_m_star
 
-    def get_dvm_dt(self, g_leak, e_leak, c_m, v_off,
-                   r_s, v_p, v_m, i_ion, i_leak):
+    def get_dvm_dt_simple(self, r_s_star, c_m_star, v_p, v_off, v_m, i_out):
+        return ((1/(r_s_star*c_m_star))*(v_p + v_off - v_m) -
+                (1/c_m_star) * i_out)
+
+    def get_dvm_dt(self, c_m, v_off, r_s, v_p, v_m, i_ion, i_leak):
         dvm_dt = ((1/(r_s*c_m)) * (v_p + v_off - v_m) - (1/c_m) *
                   (i_ion + i_leak))
 
@@ -593,16 +599,18 @@ class ExperimentalArtefacts():
     def get_dvp_dt(self, v_clamp, v_p):
         return (1/self.tau_clamp)*(v_clamp - v_p)
     
-    def get_dvclamp_dt(self, tau_sum, v_cmd, r_s_star, i_out, v_clamp):
-        return ((1/tau_sum)*((v_cmd + self.alpha *
+    def get_dvclamp_dt(self, v_cmd, r_s_star, i_out, v_clamp):
+        return ((1/self.tau_sum)*((v_cmd + self.alpha *
                               r_s_star * i_out) - v_clamp))
 
-    def get_i_in(self, i_ion, i_leak, c_p, dvp_dt, c_p_star, dvclamp_dt,
-                 c_m, c_m_star, dvm_dt):
-        i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
-        i_cm = c_m * dvm_dt - c_m_star * dvclamp_dt
+    def get_i_in(self, i_ion, i_leak, c_p, dvp_dt, dvclamp_dt,
+                 c_m, dvm_dt):
+        i_cp = c_p * dvp_dt - self.c_p_star * dvclamp_dt
+        i_cm = c_m * dvm_dt - self.c_m_star * dvclamp_dt
 
-        return i_ion + i_leak + i_cp + i_cm
+        i_in = i_ion + i_leak + i_cp + i_cm
+
+        return i_in, i_cp, i_cm
 
     def get_diout_dt(self, i_in, i_out):
         return (1/self.tau_z) * (i_in - i_out)

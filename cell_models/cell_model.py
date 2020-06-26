@@ -21,7 +21,7 @@ class CellModel:
                  default_parameters=None, updated_parameters=None,
                  no_ion_selective_dict=None, default_time_unit='s',
                  default_voltage_unit='V', default_voltage_position=0,
-                 y_ss=None):
+                 y_ss=None, is_exp_artefact=False):
         self.y_initial = y_initial
         self.default_parameters = default_parameters
         self.no_ion_selective = {}
@@ -30,6 +30,7 @@ class CellModel:
         self.y_ss = y_ss
         self.concentration_indices = concentration_indices
         self.i_stimulation = 0
+        self.is_exp_artefact = is_exp_artefact
 
         if updated_parameters:
             self.default_parameters.update(updated_parameters)
@@ -290,7 +291,6 @@ class CellModel:
         self.current_response_info = trace.CurrentResponseInfo(
             protocol=protocol)
 
-        #try:
         solution = integrate.solve_ivp(
             self.generate_voltage_clamp_function(protocol),
             [0, protocol.get_voltage_change_endpoints()[-1]],
@@ -300,23 +300,28 @@ class CellModel:
 
         self.t = solution.t
         self.y = solution.y
-        #self.y_initial = self.y[:,-1]
-        self.y_voltage = solution.y[self.default_voltage_position,:]
+
+        command_voltages = [protocol.get_voltage_at_time(t) for t in self.t]
+        self.command_voltages = command_voltages
+
+        if self.is_exp_artefact:
+            self.y_voltages = self.y[0, :]
+        else:
+            self.y_voltages = command_voltages
 
         self.calc_currents()
-        #except:
-        #    print("There was an error")
-        #    return None
-
-
 
         return trace.Trace(self.t,
-                           self.y_voltage,
+                           command_voltages=self.command_voltages,
+                           y=self.y_voltages,
                            current_response_info=self.current_response_info)
 
     def generate_voltage_clamp_function(self, protocol):
         def voltage_clamp(t, y):
-            y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
+            if self.is_exp_artefact:
+                y[26] = protocol.get_voltage_at_time(t)
+            else:
+                y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
             return self.action_potential_diff_eq(t, y)
 
         return voltage_clamp

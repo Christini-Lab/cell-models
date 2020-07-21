@@ -9,7 +9,7 @@ from scipy import integrate
 
 from cell_models import protocols
 from cell_models import trace
-from cell_models.model_initial import kernik_model_initial 
+from cell_models.model_initial import kernik_model_initial
 from math import log, exp
 
 
@@ -39,7 +39,8 @@ class KernikModel(CellModel):
                  default_time_unit='ms', 
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
-                                        'Nai': 3, 'Ki': 4}
+                                        'Nai': 3, 'Ki': 4},
+                 is_exp_artefact=False
                  ):
 
         self.kernik_currents = KernikCurrents(self.t_kelvin,
@@ -63,7 +64,9 @@ class KernikModel(CellModel):
             'ks': 1,
             'G_b_Na': 1,
             'G_b_Ca': 1,
-            'G_PCa': 1
+            'G_PCa': 1,
+            'G_seal_leak': 1,
+            'V_off': 1
         }
 
         y_initial = kernik_model_initial()
@@ -73,7 +76,8 @@ class KernikModel(CellModel):
                          updated_parameters,
                          no_ion_selective_dict,
                          default_time_unit,
-                         default_voltage_unit)
+                         default_voltage_unit,
+                         is_exp_artefact=is_exp_artefact)
 
     def action_potential_diff_eq(self, t, y):
         """
@@ -110,14 +114,18 @@ class KernikModel(CellModel):
         # 22: I (in Irel)
         """
 
-        d_y = np.zeros(23)
+        if self.is_exp_artefact:
+            d_y = np.zeros(27)
+        else:
+            d_y = np.zeros(23)
 
         # --------------------------------------------------------------------
         # Reversal Potentials:
         try:
-            E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
+            E_Ca = (0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / 
+                    self.f_coulomb_per_mmole * log(self.Cao / y[2]))  # millivolt
         except ValueError:
-            print(f'Intracellular Calcium went negative at time {t}')
+            print(f'Intracellular Calcium calcium negative at time {t}')
             y[2] = 4.88E-5
             E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
         E_Na = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Nao / y[3])  # millivolt
@@ -183,7 +191,7 @@ class KernikModel(CellModel):
         d_y[3] = self.kernik_currents.Nai_conc(i_Na, i_b_Na, i_fNa, i_NaK, i_NaCa, 
                                          i_CaL_Na, self.cm_farad, t)
 
-        #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK, 
+        #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK,
         #                                i_NaK, i_CaL_K, self.cm_farad)
         d_y[4] = -d_y[3]
 
@@ -214,34 +222,91 @@ class KernikModel(CellModel):
                 else:
                     i_no_ion += scale * current_dictionary[curr_name]
 
+        # -------------------------------------------------------------------
+        # Experimental Artefact
+        if self.is_exp_artefact:
+            ### Simple
+            i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
+                i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+                      i_PCa+i_f+i_b_Na+i_b_Ca +
+                      i_K1_ishi + i_no_ion) + self.i_stimulation)
+
+            i_seal_leak = self.exp_artefacts.get_i_leak(
+                    self.artefact_parameters['g_leak'],
+                    self.artefact_parameters['e_leak'], y[0])
+
+            i_out = i_ion + i_seal_leak
+
+            v_p = y[26] + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out
+
+            dvm_dt = self.exp_artefacts.get_dvm_dt(
+                    self.artefact_parameters['c_m'], 
+                    self.artefact_parameters['v_off'],
+                    self.artefact_parameters['r_pipette'],
+                    v_p, y[0], i_ion, i_seal_leak)
+
+            i_ion = i_ion / self.exp_artefacts.c_m_star
+            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
+            i_out = i_out/ self.exp_artefacts.c_m_star
+            i_cm = 0
+            i_cp = 0
+            i_in = 0
+
+            d_y[0] = dvm_dt
+
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_Kr),
+                    trace.Current(name='I_Ks', value=i_Ks),
+                    trace.Current(name='I_CaL', value=i_CaL_Ca),
+                    trace.Current(name='I_NaK', value=i_NaK),
+                    trace.Current(name='I_Na', value=i_Na),
+                    trace.Current(name='I_NaCa', value=i_NaCa),
+                    trace.Current(name='I_pCa', value=i_PCa),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_Na),
+                    trace.Current(name='I_bCa', value=i_b_Ca),
+                    trace.Current(name='I_CaT', value=i_CaT),
+                    trace.Current(name='I_up', value=i_up),
+                    trace.Current(name='I_leak', value=i_leak),
+                    trace.Current(name='I_ion', value=i_ion),
+                    trace.Current(name='I_seal_leak', value=i_seal_leak),
+                    trace.Current(name='I_out', value=i_out),
+                    trace.Current(name='I_Cm', value=i_cm),
+                    trace.Current(name='I_Cp', value=i_cp),
+                    trace.Current(name='I_in', value=i_in)
+                ]
+                self.current_response_info.currents.append(current_timestep)
 
         # --------------------------------------------------------------------
-        # Calculate change in Voltage and Save currents 
-        d_y[0] = -(i_K1+i_to+i_Kr+i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
-                   i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) + self.i_stimulation
+        # Calculate change in Voltage and Save currents
+        else:
+            d_y[0] = -(i_K1+i_to+i_Kr+i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+                       i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) + self.i_stimulation
 
-        if self.current_response_info:
-            current_timestep = [
-                trace.Current(name='I_K1', value=i_K1),
-                trace.Current(name='I_To', value=i_to),
-                trace.Current(name='I_Kr', value=i_Kr),
-                trace.Current(name='I_Ks', value=i_Ks),
-                trace.Current(name='I_CaL', value=i_CaL_Ca),
-                trace.Current(name='I_NaK', value=i_NaK),
-                trace.Current(name='I_Na', value=i_Na),
-                trace.Current(name='I_NaCa', value=i_NaCa),
-                trace.Current(name='I_pCa', value=i_PCa),
-                trace.Current(name='I_F', value=i_f),
-                trace.Current(name='I_bNa', value=i_b_Na),
-                trace.Current(name='I_bCa', value=i_b_Ca),
-                trace.Current(name='I_CaT', value=i_CaT),
-                trace.Current(name='I_up', value=i_up),
-                trace.Current(name='I_leak', value=i_leak)
-            ]
-            self.current_response_info.currents.append(current_timestep)
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_Kr),
+                    trace.Current(name='I_Ks', value=i_Ks),
+                    trace.Current(name='I_CaL', value=i_CaL_Ca),
+                    trace.Current(name='I_NaK', value=i_NaK),
+                    trace.Current(name='I_Na', value=i_Na),
+                    trace.Current(name='I_NaCa', value=i_NaCa),
+                    trace.Current(name='I_pCa', value=i_PCa),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_Na),
+                    trace.Current(name='I_bCa', value=i_b_Ca),
+                    trace.Current(name='I_CaT', value=i_CaT),
+                    trace.Current(name='I_up', value=i_up),
+                    trace.Current(name='I_leak', value=i_leak)
+                ]
+                self.current_response_info.currents.append(current_timestep)
 
         return d_y
-
 
 def generate_trace(protocol, tunable_parameters=None, params=None):
     """Generates a trace.

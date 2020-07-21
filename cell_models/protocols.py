@@ -21,7 +21,7 @@ class PacedProtocol:
 
         """
         if (model_name == "Kernik"):
-            self.stim_amplitude = 180
+            self.stim_amplitude = 220
             self.stim_duration = 5
         elif model_name == "OR":
             self.stim_amplitude = 80
@@ -328,19 +328,18 @@ class VoltageClampProtocol:
         step_index = bisect.bisect_left(
             self.get_voltage_change_endpoints(),
             time)
-        if step_index != len(self.get_voltage_change_endpoints()):
-            current_step = self.steps[step_index]
-            time_into_step = time - self.get_voltage_change_startpoints()[
+
+        current_step = self.steps[step_index]
+        time_into_step = time - self.get_voltage_change_startpoints()[
                     step_index]
 
-            if isinstance(current_step, VoltageClampStep):
-                return current_step.voltage
-            elif isinstance(current_step, VoltageClampRamp):
-                return current_step.get_voltage(time_into_step)
-            else:
-                return current_step.get_voltage(time_into_step)
+        if isinstance(current_step, VoltageClampStep):
+            return current_step.voltage
+        elif isinstance(current_step, VoltageClampRamp):
+            return current_step.get_voltage(time_into_step)
+        else:
+            return current_step.get_voltage(time_into_step)
 
-        raise ValueError('End of voltage protocol.')
 
     def plot_voltage_clamp_protocol(self):
         duration = self.get_voltage_change_endpoints()[-1]

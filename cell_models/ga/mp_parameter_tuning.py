@@ -54,7 +54,7 @@ class GAParams():
     """
 
     def __init__(self, model_name, vc_config,
-                 protocol, is_parameter_recovery=True,
+                 protocols, is_parameter_recovery=True,
                  is_target_baseline=True):
         """
         Initialize the class
@@ -63,7 +63,7 @@ class GAParams():
             self.cell_model = KernikModel
 
         self.vc_config = vc_config
-        self.protocol = protocol
+        self.protocols = protocols
         self.previous_population = None
 
 def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
@@ -91,28 +91,35 @@ def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
         index = 5
 
         target_cell = ga_params.cell_model(
-            updated_parameters=random_ss[index][0])
+            updated_parameters=random_ss[index][0],
+            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
 
-        target_cell.y_initial = random_ss[index][1]
-        target_cell.y_ss = random_ss[index][1]
+        if ga_params.vc_config.with_exp_artefact:
+            target_cell.y_initial[0:23] = random_ss[index][1]
+            target_cell.y_ss = target_cell.y_initial
+        else:
+            target_cell.y_initial = random_ss[index][1]
+            target_cell.y_ss = random_ss[index][1]
 
     else:
-        try:
-            tr = load(pkg_resources.resource_stream(
-                __name__, "baseline_trace.npy"))
-            tr.is_interpolated = False
-            return tr
-        except:
-            target_cell = ga_params.cell_model()
-            baseline_y_ss = np.load(pkg_resources.resource_stream(
+        target_cell = ga_params.cell_model(
+            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
+        baseline_y_ss = np.load(pkg_resources.resource_stream(
                 __name__, "baseline_ss.npy"), allow_pickle=True)
+
+        if ga_params.vc_config.with_exp_artefact:
+            target_cell.y_initial[0:23] = baseline_y_ss[1]
+            target_cell.y_ss = target_cell.y_initial
+        else:
             target_cell.y_ss = baseline_y_ss[1]
             target_cell.y_initial = baseline_y_ss[1]
 
+    traces = {}
 
-    tr = get_model_response(target_cell, ga_params.protocol)
+    for current, protocol in ga_params.protocols.items():
+        traces[current] = get_model_response(target_cell, protocol)
 
-    return tr
+    return traces
 
 def run_ga(ga_params, toolbox):
     """
@@ -126,7 +133,7 @@ def run_ga(ga_params, toolbox):
 
     population = toolbox.population(ga_params.vc_config.population_size)
 
-    protocols = [copy.deepcopy(ga_params.vc_config.protocol) for i in range(
+    protocols = [copy.deepcopy(ga_params.vc_config.protocols) for i in range(
         0, ga_params.vc_config.population_size)]
 
     eval_input = np.transpose([population, protocols])
@@ -134,7 +141,7 @@ def run_ga(ga_params, toolbox):
     fitnesses = toolbox.map(toolbox.evaluate, eval_input)
    
     for ind, fit in zip(population, fitnesses):
-        ind.fitness.values = [fit]
+        ind.fitness.values = fit
 
     # Store initial population details for result processing.
     initial_population = []
@@ -171,15 +178,15 @@ def run_ga(ga_params, toolbox):
         # mutation, will be re-evaluated.
         updated_individuals = [i for i in offspring if not i.fitness.values]
 
-        protocols = [copy.deepcopy(ga_params.vc_config.protocol) for i in range(
-            0, len(updated_individuals))]
+        protocols = [copy.deepcopy(ga_params.vc_config.protocols) for i in
+                     range(0, len(updated_individuals))]
 
         eval_input = np.transpose([updated_individuals, protocols])
 
         fitnesses = toolbox.map(toolbox.evaluate, eval_input)
 
         for ind, fit in zip(updated_individuals, fitnesses):
-            ind.fitness.values = [fit]
+            ind.fitness.values = fit
 
         population = offspring
 
@@ -196,11 +203,12 @@ def run_ga(ga_params, toolbox):
         generate_statistics(population)
     
     final_ga_results = genetic_algorithm_results.GAResultParameterTuning(
-            'kernik', TARGET, final_population, GA_PARAMS.vc_config)
+            'kernik', TARGETS, final_population, GA_PARAMS.vc_config)
 
     return final_ga_results
 
-def get_model_response(model, protocol, prestep=10000.0):
+
+def get_model_response(model, protocol, prestep=5000.0):
     """
     Parameters
     ----------
@@ -230,6 +238,7 @@ def get_model_response(model, protocol, prestep=10000.0):
 
     return response_trace
 
+
 def _initialize_individuals(vc_config, cell_model):
     """
     Creates the initial population of individuals. The initial 
@@ -248,7 +257,9 @@ def _initialize_individuals(vc_config, cell_model):
     keys = [val.name for val in vc_config.tunable_parameters]
 
     return cell_model(
-        updated_parameters=dict(zip(keys, initial_params)))
+        updated_parameters=dict(zip(keys, initial_params)), 
+        is_exp_artefact=vc_config.with_exp_artefact)
+
 
 def _evaluate_performance(eval_input):
     """
@@ -260,22 +271,25 @@ def _evaluate_performance(eval_input):
                 The error between the trace generated by the individual's
                 parameter set and the baseline target objective.
     """
-    t_start = time.time()
-    individual, protocol = eval_input
-    individual = individual[0]
+    individual, protocols = eval_input
+    individual_model = individual[0]
+    y_initial = individual_model.y_initial
 
-    primary_trace = None
+    errors = []
 
-    while primary_trace is None:
-        primary_trace = get_model_response(individual,
-                                           protocol)
-        if primary_trace is None:
-            print("Individual errored. Returning 10,000")
-            return 10000
-
-    error = compare_individual(primary_trace)
+    for current, protocol in protocols.items():
+        individual_model.y_ss = None
+        individual_model.y_initial = y_initial
+        try:
+            new_trace = get_model_response(individual_model, protocol)
+            target = TARGETS[current]
+        
+            errors.append(target.compare_individual(new_trace))
+        except:
+            print("Model errored. Adding error of 1000000 for current")
+            errors.append(1000000)
     
-    return error
+    return errors
 
 def _mate(i_one, i_two):
     """Performs crossover between two individuals.
@@ -320,46 +334,24 @@ def _mutate(individual):
             individual[0].default_parameters[key] = new_param
 
 def generate_statistics(population: List[List[List[float]]]) -> None:
-    fitness_values = [i.fitness.values[0] for i in population]
-    print('  Min fitness: {}'.format(min(fitness_values)))
-    print('  Max fitness: {}'.format(max(fitness_values)))
+    for index, current in enumerate(list(GA_PARAMS.vc_config.protocols.keys())):
+        fitness_values = [i.fitness.values[index] for i in population]
+        print(f'Details for: {current}')
+        print('\t\tMin fitness: {}'.format(min(fitness_values)))
+        print('\t\tMax fitness: {}'.format(max(fitness_values)))
+        print('\t\tAverage fitness: {}'.format(np.mean(fitness_values)))
+        print('\t\tStandard deviation: {}'.format(np.std(fitness_values)))
 
-    print('  Average fitness: {}'.format(np.mean(fitness_values)))
-    print('  Standard deviation: {}'.format(np.std(fitness_values)))
+creator.create('FitnessMulti', base.Fitness, weights=(-1.0, -1.0, -1.0,
+                                                    -1.0, -1.0, -1.0))
+creator.create('Individual', list, fitness=creator.FitnessMulti)
 
-def compare_individual(individual):
-    if individual is None:
-        return 4500 
-    if not TARGET.is_interpolated:
-        TARGET.interp_time = np.linspace(TARGET.t[0], TARGET.t[-1], int(
-            TARGET.t[-1] - TARGET.t[0]))
-
-        f = interp1d(TARGET.t,
-                     TARGET.current_response_info.get_current_summed())
-
-        TARGET.interp_current = f(TARGET.interp_time)
-
-        TARGET.is_interpolated = True
-
-    f = interp1d(individual.t,
-                 individual.current_response_info.get_current_summed())
-
-    individual_current = f(TARGET.interp_time)
-
-    error = sum(abs(TARGET.interp_current - individual_current))
-
-    return error
-
-
-creator.create('FitnessMin', base.Fitness, weights=(-1.0,))
-creator.create('Individual', list, fitness=creator.FitnessMin)
-
-def start_ga(kernik_protocol, vc_config, is_baseline=True):
+def start_ga(protocols, vc_config, is_baseline=True):
     global GA_PARAMS
-    global TARGET
+    global TARGETS
 
-    GA_PARAMS = GAParams('Kernik', vc_config, kernik_protocol)
-    TARGET = initialize_target(GA_PARAMS, is_baseline=is_baseline)
+    GA_PARAMS = GAParams('Kernik', vc_config, protocols)
+    TARGETS = initialize_target(GA_PARAMS, is_baseline=is_baseline)
 
     toolbox = base.Toolbox()
     toolbox.register('init_param',
@@ -376,9 +368,14 @@ def start_ga(kernik_protocol, vc_config, is_baseline=True):
                      list,
                      toolbox.individual)
     toolbox.register('evaluate', _evaluate_performance)
-    toolbox.register('select',
-                     tools.selTournament,
-                     tournsize=GA_PARAMS.vc_config.tournament_size)
+    if len(protocols.items()) > 1:
+        print("Treat as multi-objective")
+        toolbox.register('select', tools.selNSGA2)
+    else:
+        print("Treat as having one objective")
+        toolbox.register('select',
+                         tools.selTournament,
+                         tournsize=GA_PARAMS.vc_config.tournament_size)
     toolbox.register('mate', _mate)
     toolbox.register('mutate', _mutate)
 

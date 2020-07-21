@@ -111,7 +111,8 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
                  gene_mutation_probability: float,
                  tournament_size: int,
                  secondary_protocol: protocols.PROTOCOL_TYPE=None,
-                 target_params=None) -> None:
+                 target_params=None,
+                 with_exp_artefact=False) -> None:
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -126,6 +127,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
         self.tunable_parameters = tunable_parameters
         self.secondary_protocol = secondary_protocol
         self.target_params = target_params
+        self.with_exp_artefact = with_exp_artefact
 
     def has_equal_hyperparameters(self, other: 'ParameterTuningConfig') -> bool:
         return (super().has_equal_hyperparameters(other=other) and
@@ -172,7 +174,8 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
                  gene_mutation_probability: float,
                  tournament_size: int,
                  target_current: str = None,
-                 step_types = ["step", "ramp", "sinusoid"]):
+                 step_types = ["step", "ramp", "sinusoid"],
+                 with_artefact=False):
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -188,6 +191,7 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
         self.step_voltage_bounds = step_voltage_bounds
         self.target_current = target_current
         self.step_types = step_types
+        self.with_artefact = with_artefact
 
 
 class CombinedVCConfig:

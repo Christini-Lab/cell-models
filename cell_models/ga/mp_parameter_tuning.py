@@ -91,18 +91,28 @@ def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
         index = 5
 
         target_cell = ga_params.cell_model(
-            updated_parameters=random_ss[index][0])
+            updated_parameters=random_ss[index][0],
+            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
 
-        target_cell.y_initial = random_ss[index][1]
-        target_cell.y_ss = random_ss[index][1]
+        if ga_params.vc_config.with_exp_artefact:
+            target_cell.y_initial[0:23] = random_ss[index][1]
+            target_cell.y_ss = target_cell.y_initial
+        else:
+            target_cell.y_initial = random_ss[index][1]
+            target_cell.y_ss = random_ss[index][1]
 
     else:
-        target_cell = ga_params.cell_model()
+        target_cell = ga_params.cell_model(
+            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
         baseline_y_ss = np.load(pkg_resources.resource_stream(
                 __name__, "baseline_ss.npy"), allow_pickle=True)
-        target_cell.y_ss = baseline_y_ss[1]
-        target_cell.y_initial = baseline_y_ss[1]
 
+        if ga_params.vc_config.with_exp_artefact:
+            target_cell.y_initial[0:23] = baseline_y_ss[1]
+            target_cell.y_ss = target_cell.y_initial
+        else:
+            target_cell.y_ss = baseline_y_ss[1]
+            target_cell.y_initial = baseline_y_ss[1]
 
     traces = {}
 
@@ -247,7 +257,8 @@ def _initialize_individuals(vc_config, cell_model):
     keys = [val.name for val in vc_config.tunable_parameters]
 
     return cell_model(
-        updated_parameters=dict(zip(keys, initial_params)))
+        updated_parameters=dict(zip(keys, initial_params)), 
+        is_exp_artefact=vc_config.with_exp_artefact)
 
 
 def _evaluate_performance(eval_input):
@@ -275,7 +286,7 @@ def _evaluate_performance(eval_input):
         
             errors.append(target.compare_individual(new_trace))
         except:
-            print("Model errored. Adding error of 8 for current")
+            print("Model errored. Adding error of 1000000 for current")
             errors.append(1000000)
     
     return errors

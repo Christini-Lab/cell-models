@@ -22,7 +22,7 @@ class KernikModel(CellModel):
         updated_parameters: A dict containing all parameters that are being
             tuned.
     """
-    cm_pfarad = 60
+    cm_farad = 60
 
     # Constants
     t_kelvin = 310.0  
@@ -113,9 +113,9 @@ class KernikModel(CellModel):
 
             g_leak = 1/6 #1/Gohms
             e_leak = 0 #mV
-            v_off = 5 #mV
+            v_off = -2.8 #mV
             c_p = 4 #pf
-            r_pipette = 10E-3 #Gohms
+            r_pipette = 3E-3 #Gohms
             c_m = 60 # pf
 
             self.artefact_parameters = {'g_leak': g_leak,
@@ -140,7 +140,7 @@ class KernikModel(CellModel):
                          updated_parameters,
                          no_ion_selective_dict,
                          default_time_unit,
-                         default_voltage_unit, 
+                         default_voltage_unit,
                          is_exp_artefact=is_exp_artefact)
 
     def action_potential_diff_eq(self, t, y):
@@ -250,10 +250,10 @@ class KernikModel(CellModel):
 
         d_y[2] = self.kernik_currents.Cai_conc(y[2], i_leak, i_up, i_rel, 
                                          i_CaL_Ca, i_CaT, i_b_Ca,
-                                         i_PCa, i_NaCa, self.cm_pfarad)
+                                         i_PCa, i_NaCa, self.cm_farad)
 
         d_y[3] = self.kernik_currents.Nai_conc(i_Na, i_b_Na, i_fNa, i_NaK, i_NaCa, 
-                                         i_CaL_Na, self.cm_pfarad, t)
+                                         i_CaL_Na, self.cm_farad, t)
 
         #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK,
         #                                i_NaK, i_CaL_K, self.cm_farad)
@@ -289,7 +289,7 @@ class KernikModel(CellModel):
         # -------------------------------------------------------------------
         # Experimental Artefact
         if self.is_exp_artefact:
-            is_simple = True 
+            is_simple = True
 
             if is_simple:
                 ### Simple
@@ -320,56 +320,54 @@ class KernikModel(CellModel):
                 i_in = 0
 
                 d_y[0] = dvm_dt
-            else:
-                ### Not Simple
-                i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
-                    i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
-                          i_PCa+i_f+i_b_Na+i_b_Ca +
-                          i_K1_ishi + i_no_ion) + self.i_stimulation)
+            #else:
+            #    ### Not Simple
+            #    i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
+            #        i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
+            #              i_PCa+i_f+i_b_Na+i_b_Ca +
+            #              i_K1_ishi + i_no_ion) + self.i_stimulation)
 
-                i_seal_leak = self.exp_artefacts.get_i_leak(
-                        self.artefact_parameters['g_leak'],
-                        self.artefact_parameters['e_leak'], y[0])
+            #    i_seal_leak = self.exp_artefacts.get_i_leak(
+            #            self.artefact_parameters['g_leak'],
+            #            self.artefact_parameters['e_leak'], y[0])
 
-                #i_out = i_ion + i_seal_leak
+            #    #i_out = i_ion + i_seal_leak
 
-                dvp_dt = self.exp_artefacts.get_dvp_dt(y[24], y[23])
+            #    dvp_dt = self.exp_artefacts.get_dvp_dt(y[24], y[23])
 
-                dvclamp_dt = self.exp_artefacts.get_dvclamp_dt(y[26], 
-                        self.artefact_parameters['r_pipette'], y[25], y[24])
+            #    dvclamp_dt = self.exp_artefacts.get_dvclamp_dt(y[26], 
+            #            self.artefact_parameters['r_pipette'], y[25], y[24])
 
-                dvm_dt = self.exp_artefacts.get_dvm_dt(
-                        self.artefact_parameters['c_m'],    
-                        self.artefact_parameters['v_off'],
-                        self.artefact_parameters['r_pipette'],
-                        y[23], y[0], i_ion, i_seal_leak)
+            #    dvm_dt = self.exp_artefacts.get_dvm_dt(
+            #            self.artefact_parameters['c_m'],    
+            #            self.artefact_parameters['v_off'],
+            #            self.artefact_parameters['r_pipette'],
+            #            y[23], y[0], i_ion, i_seal_leak)
 
-                i_in, i_cp, i_cm = self.exp_artefacts.get_i_in(i_ion, i_seal_leak,
-                                                   self.artefact_parameters['c_p'],
-                                                   dvp_dt, dvclamp_dt,
-                                                   self.artefact_parameters['c_m'],
-                                                   dvm_dt)
+            #    i_in, i_cp, i_cm = self.exp_artefacts.get_i_in(i_ion, i_seal_leak,
+            #                                       self.artefact_parameters['c_p'],
+            #                                       dvp_dt, dvclamp_dt,
+            #                                       self.artefact_parameters['c_m'],
+            #                                       dvm_dt)
 
-                diout_dt = self.exp_artefacts.get_diout_dt(i_in, y[25])
+            #    diout_dt = self.exp_artefacts.get_diout_dt(i_in, y[25])
 
-                d_y[0] = dvm_dt
-                d_y[23] = dvp_dt
-                d_y[24] = dvclamp_dt
-                d_y[25] = diout_dt
+            #    d_y[0] = dvm_dt
+            #    d_y[23] = dvp_dt
+            #    d_y[24] = dvclamp_dt
+            #    d_y[25] = diout_dt
 
-                i_ion = i_ion / self.exp_artefacts.c_m_star
-                i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
-                i_out = y[25]/ self.exp_artefacts.c_m_star
-                i_cm = i_cm / self.exp_artefacts.c_m_star
-                i_cp = i_cp / self.exp_artefacts.c_m_star
-                i_in = i_in / self.exp_artefacts.c_m_star 
+            #    i_ion = i_ion / self.exp_artefacts.c_m_star
+            #    i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
+            #    i_out = y[25]/ self.exp_artefacts.c_m_star
+            #    i_cm = i_cm / self.exp_artefacts.c_m_star
+            #    i_cp = i_cp / self.exp_artefacts.c_m_star
+            #    i_in = i_in / self.exp_artefacts.c_m_star 
 
-                d_y[0] = dvm_dt
-                d_y[23] = dvp_dt
-                d_y[24] = dvclamp_dt
-                d_y[25] = diout_dt
-
-
+            #    d_y[0] = dvm_dt
+            #    d_y[23] = dvp_dt
+            #    d_y[24] = dvclamp_dt
+            #    d_y[25] = diout_dt
 
             if self.current_response_info:
                 current_timestep = [

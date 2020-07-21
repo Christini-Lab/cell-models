@@ -270,7 +270,7 @@ def calculate_current_contributions(currents: List[List[Current]]):
     current_contributions = {}
 
     for time_steps in currents:
-        total_curr = sum([abs(curr.value) for curr in time_steps])
+        total_curr = sum([abs(curr.value) for curr in time_steps if curr.name not in ["I_out", "I_ion"]])
         for current in time_steps:
             if current.name in current_contributions:
                 current_contributions[current.name].append(
@@ -347,12 +347,19 @@ class Trace:
     def get_last_ap(self, is_peak=True):
         if is_peak:
             inds = argrelextrema(self.y, np.greater)
+            bounds = inds[0][-4:-2]
+            
+            start_idx = np.abs(self.t - (self.t[bounds[0]] - 30.0)).argmin()
+            end_idx = np.abs(self.t - (self.t[bounds[1]] - 30.0)).argmin()
         else:
-            inds = argrelextrema(-self.y, np.greater)
-        bounds = inds[0][-3:-1]
-        
-        start_idx = np.abs(self.t - (self.t[bounds[0]] - 30.0)).argmin()
-        end_idx = np.abs(self.t - (self.t[bounds[1]] - 30.0)).argmin()
+            inds = argrelextrema(self.y, np.greater, order=60)
+            cycle = self.t[inds[0][-3]] - self.t[inds[0][-4]]
+            cycle_25p = cycle *.25
+            start_time = self.t[inds[0][-3]] - cycle_25p
+            end_time = start_time + cycle
+
+            start_idx = np.abs(self.t - start_time).argmin()
+            end_idx = np.abs(self.t - end_time).argmin()
 
         self.last_ap = pd.DataFrame({'t': self.t[start_idx:end_idx],
                                     'V': self.y[start_idx:end_idx]})
@@ -561,8 +568,3 @@ class Trace:
 
         axs[-1].set_xlabel("Time (ms)")
         plt.show() 
-
-
-
-
-

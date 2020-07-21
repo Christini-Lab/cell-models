@@ -21,7 +21,7 @@ class PacedProtocol:
 
         """
         if (model_name == "Kernik"):
-            self.stim_amplitude = 180
+            self.stim_amplitude = 220
             self.stim_duration = 5
         elif model_name == "OR":
             self.stim_amplitude = 80

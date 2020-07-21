@@ -32,6 +32,7 @@ class CellModel:
         self.i_stimulation = 0
         self.is_exp_artefact = is_exp_artefact
 
+
         if updated_parameters:
             self.default_parameters.update(updated_parameters)
         if no_ion_selective_dict:

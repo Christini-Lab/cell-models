@@ -585,7 +585,7 @@ class VCOptimizationIndividual(Individual):
             prestep=5000) -> int:
         """Evaluates the fitness of the individual."""
         i_trace = get_model_response(
-                kernik.KernikModel(), self.protocol, prestep=prestep)
+                kernik.KernikModel(is_exp_artefact=config.with_artefact), self.protocol, prestep=prestep)
         #i_trace = kernik.KernikModel().generate_response(protocol=self.protocol)
 
         if not i_trace:
@@ -626,6 +626,10 @@ def get_model_response(model, protocol, prestep):
                       1.12139759e-01, 9.89533019e-01,  1.79477762e-04,  
                       1.29720330e-04,  9.63309509e-01, 5.37483590e-02,  
                       3.60848821e-05,  6.34831828e-04]
+        if model.is_exp_artefact:
+            y_ss = model.y_ss
+            model.y_ss = model.y_initial
+            model.y_ss[0:23] = y_ss
     else:
         prestep_protocol = protocols.VoltageClampProtocol(
             [protocols.VoltageClampStep(voltage=-80.0,

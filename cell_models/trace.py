@@ -270,7 +270,7 @@ def calculate_current_contributions(currents: List[List[Current]]):
     current_contributions = {}
 
     for time_steps in currents:
-        total_curr = sum([abs(curr.value) for curr in time_steps])
+        total_curr = sum([abs(curr.value) for curr in time_steps if curr.name not in ["I_out", "I_ion"]])
         for current in time_steps:
             if current.name in current_contributions:
                 current_contributions[current.name].append(
@@ -304,6 +304,7 @@ class Trace:
     def __init__(self,
                  t: List[float],
                  y: List[float],
+                 command_voltages=None,
                  pacing_info: IrregularPacingInfo=None,
                  current_response_info: CurrentResponseInfo=None) -> None:
 
@@ -313,6 +314,7 @@ class Trace:
         self.pacing_info = pacing_info
         self.current_response_info = current_response_info
         self.last_ap = None
+        self.command_voltages = command_voltages
 
     def get_cl(self):
         if self.last_ap is None:
@@ -342,15 +344,27 @@ class Trace:
 
         return [self.last_ap.t.iloc[dv_dt_diff.idxmax()], dv_dt_diff.idxmax()]
 
-    def get_last_ap(self):
-        inds = argrelextrema(self.y, np.greater)
-        bounds = inds[0][-3:-1]
-        
-        start_idx = np.abs(self.t - (self.t[bounds[0]] - 30.0)).argmin()
-        end_idx = np.abs(self.t - (self.t[bounds[1]] - 30.0)).argmin()
+    def get_last_ap(self, is_peak=True):
+        if is_peak:
+            inds = argrelextrema(self.y, np.greater)
+            bounds = inds[0][-4:-2]
+            
+            start_idx = np.abs(self.t - (self.t[bounds[0]] - 30.0)).argmin()
+            end_idx = np.abs(self.t - (self.t[bounds[1]] - 30.0)).argmin()
+        else:
+            inds = argrelextrema(self.y, np.greater, order=60)
+            cycle = self.t[inds[0][-3]] - self.t[inds[0][-4]]
+            cycle_25p = cycle *.25
+            start_time = self.t[inds[0][-3]] - cycle_25p
+            end_time = start_time + cycle
+
+            start_idx = np.abs(self.t - start_time).argmin()
+            end_idx = np.abs(self.t - end_time).argmin()
 
         self.last_ap = pd.DataFrame({'t': self.t[start_idx:end_idx],
                                     'V': self.y[start_idx:end_idx]})
+
+        return self.last_ap
 
     def plot(self):
         plt.figure(figsize=(10, 5))
@@ -427,6 +441,7 @@ class Trace:
 
     def compare_individual(self, individual):
         if individual is None:
+            print("Returning 100")
             return 100
         if not self.is_interpolated:
             self.interp_time = np.linspace(self.t[0], self.t[-1], int(
@@ -444,9 +459,9 @@ class Trace:
 
         individual_current = f(self.interp_time)
 
-        error = np.log10(sum(abs(self.interp_current - individual_current)))
+        error = sum(abs(self.interp_current - individual_current))
 
-        return error 
+        return error
 
     def plot_currents_contribution(self, current, window=75, step_size=5, 
             title=None, saved_to=None, voltage_bounds=None):
@@ -502,34 +517,54 @@ class Trace:
         else: 
             plt.savefig(saved_to)
 
-    #def plot_with_concentrations(self):
-    #    if not self.current_response_info:
-    #        return ValueError('Trace does not have current info stored. Trace '
-    #                          'was not generated with voltage clamp protocol.')
-    #    fig, (ax_1, ax_2, ax_3, ax_4) = plt.subplots(1, 4, num=1)
+    def plot_with_individual_currents(self, currents, with_artefacts=False):
+        """
+        Plots the voltage on tope, then the current response of each
+        input current.
+        """
+        num_subplots = len(currents) + 2 # +2 for Vm and Total current
+        #create subplots
+        fig, axs = plt.subplots(num_subplots, 1, sharex=True)
 
-    #    ax_1.plot(
-    #        [i for i in self.t],
-    #        [i for i in self.y],
-    #        'b',
-    #        label='Voltage')
-    #    plt.xlabel('Time (ms)')
-    #    plt.ylabel(r'$V_m$ (mV)')
-    #    
-    #    plt.legend()
+        axs[0].plot(
+            [i for i in self.t],
+            [i for i in self.y],
+            label=r'$V_m$')
+        axs[0].set_ylabel('Voltage (mV)')
 
-    #    import pdb
-    #    pdb.set_trace()
 
-    #    ax_2.plot(
-    #        [i for i in self.t],
-    #        [i for i in self.current_response_info.get_current_summed()],
-    #        '--',
-    #        label=label)
-    #    ax_2.yaxis.tick_right()
-    #    ax_2.yaxis.set_label_position("right")
-    #    plt.ylabel(r'$I_m$ (nA/nF)')
+        if with_artefacts:
+            axs[0].plot(
+                [i for i in self.t],
+                [i for i in self.command_voltages],
+                label=r'$V_{cmd}$')
 
-    #    ax_1.spines['top'].set_visible(False)
-    #    if title:
-    #        plt.title(r'{}'.format(title))
+            axs[0].legend()
+
+        if with_artefacts:
+            i_ion = self.current_response_info.get_current(["I_ion"])
+            i_out = self.current_response_info.get_current(["I_out"])
+            axs[1].plot([i for i in self.t], [i for i in i_ion],
+                        label=r'$I_{ion}$')
+            axs[1].plot([i for i in self.t], [i for i in i_out], '--',
+                        label=r'$I_{out}$')
+            axs[1].set_ylabel(r'$I_{total}$ (nA/nF)')
+            axs[1].legend()
+        else:
+            axs[1].plot(
+                [i for i in self.t],
+                [i for i in self.current_response_info.get_current_summed()],
+                '--',
+                label=r'$I_{ion}$')
+            axs[1].set_ylabel(r'$I_m$ (nA/nF)')
+
+        for i, current in enumerate(currents):
+            i_curr = self.current_response_info.get_current([current])
+            current_ax = 2 + i
+            axs[current_ax].plot([i for i in self.t], [i for i in i_curr],
+            label=current)
+            axs[current_ax].set_ylabel(f'{current} (pA/pF)')
+            axs[current_ax].legend()
+
+        axs[-1].set_xlabel("Time (ms)")
+        plt.show() 

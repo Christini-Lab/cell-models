@@ -5,8 +5,9 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 
-from cell_models import protocols
+from cell_models import protocols 
 from cell_models import trace
+from cell_models.current_models import ExperimentalArtefacts
 
 class CellModel:
     """An implementation a general cell model
@@ -21,7 +22,7 @@ class CellModel:
                  default_parameters=None, updated_parameters=None,
                  no_ion_selective_dict=None, default_time_unit='s',
                  default_voltage_unit='V', default_voltage_position=0,
-                 y_ss=None):
+                 y_ss=None, is_exp_artefact=False):
         self.y_initial = y_initial
         self.default_parameters = default_parameters
         self.no_ion_selective = {}
@@ -30,6 +31,8 @@ class CellModel:
         self.y_ss = y_ss
         self.concentration_indices = concentration_indices
         self.i_stimulation = 0
+        self.is_exp_artefact = is_exp_artefact
+
 
         if updated_parameters:
             self.default_parameters.update(updated_parameters)
@@ -52,6 +55,78 @@ class CellModel:
         self.d_y_voltage = []
         self.current_response_info = None
         self.full_y = []
+
+        if is_exp_artefact:
+            """
+            differential equations for Kernik iPSC-CM model
+            solved by ODE15s in main_ipsc.m
+
+            # State variable definitions:
+            # 0: Vm (millivolt)
+
+            # Ionic Flux: ---------------------------------------------------------
+            # 1: Ca_SR (millimolar)
+            # 2: Cai (millimolar)
+            # 3: Nai (millimolar)
+            # 4: Ki (millimolar)
+
+            # Current Gating (dimensionless):--------------------------------------
+            # 5: y1    (I_K1 Ishihara)
+            # 6: d     (activation in i_CaL)
+            # 7: f1    (inactivation in i_CaL)
+            # 8: fCa   (calcium-dependent inactivation in i_CaL)
+            # 9: Xr1   (activation in i_Kr)
+            # 10: Xr2  (inactivation in i_Kr
+            # 11: Xs   (activation in i_Ks)
+            # 12: h    (inactivation in i_Na)
+            # 13: j    (slow inactivation in i_Na)
+            # 14: m    (activation in i_Na)
+            # 15: Xf   (inactivation in i_f)
+            # 16: s    (inactivation in i_to)
+            # 17: r    (activation in i_to)
+            # 18: dCaT (activation in i_CaT)
+            # 19: fCaT (inactivation in i_CaT)
+            # 20: R (in Irel)
+            # 21: O (in Irel)
+            # 22: I (in Irel)
+
+            # With experimental artefact --------------------------------------
+            # 23: Vp (millivolt)
+            # 24: Vclamp (millivolt)
+            # 25: Iout (nA)
+            # 26: Vcmd (millivolt)
+            """
+            self.exp_artefacts = ExperimentalArtefacts()
+
+            e_leak = 0 #mV
+            # Change g_leak
+            g_leak = 1/6 * default_parameters['G_seal_leak'] #1/Gohms
+
+            # Change v_off
+            v_off_shift = np.log10(default_parameters['V_off']) * 10
+            v_off = -2.8 + v_off_shift  #mV
+
+            c_p = 4 #pf
+            r_pipette = 3E-3 #Gohms
+            c_m = 60 # pf
+
+
+            self.artefact_parameters = {'g_leak': g_leak,
+                                        'e_leak': e_leak,
+                                        'v_off': v_off,
+                                        'c_p': c_p,
+                                        'r_pipette': r_pipette,
+                                        'c_m': c_m}
+
+            v_p_initial = 100 #mV
+            v_clamp_initial = 100 #mV
+            i_out_initial = 1
+            v_cmd_initial = -80 #mV
+
+            self.y_initial = np.append(self.y_initial, v_p_initial)
+            self.y_initial = np.append(self.y_initial, v_clamp_initial)
+            self.y_initial = np.append(self.y_initial, i_out_initial)
+            self.y_initial = np.append(self.y_initial, v_cmd_initial)
 
     @property
     def no_ion_selective(self):
@@ -290,33 +365,37 @@ class CellModel:
         self.current_response_info = trace.CurrentResponseInfo(
             protocol=protocol)
 
-        try:
-            solution = integrate.solve_ivp(
-                self.generate_voltage_clamp_function(protocol),
-                [0, protocol.get_voltage_change_endpoints()[-1]],
-                y_init,
-                method='BDF',
-                max_step=1e-3*self.time_conversion)
+        solution = integrate.solve_ivp(
+            self.generate_voltage_clamp_function(protocol),
+            [0, protocol.get_voltage_change_endpoints()[-1]],
+            y_init,
+            method='BDF',
+            max_step=1e-3*self.time_conversion)
 
-            self.t = solution.t
-            self.y = solution.y
-            #self.y_initial = self.y[:,-1]
-            self.y_voltage = solution.y[self.default_voltage_position,:]
+        self.t = solution.t
+        self.y = solution.y
 
-            self.calc_currents()
-        except:
-            print("There was an error")
-            return None
+        command_voltages = [protocol.get_voltage_at_time(t) for t in self.t]
+        self.command_voltages = command_voltages
 
+        if self.is_exp_artefact:
+            self.y_voltages = self.y[0, :]
+        else:
+            self.y_voltages = command_voltages
 
+        self.calc_currents()
 
         return trace.Trace(self.t,
-                           self.y_voltage,
+                           command_voltages=self.command_voltages,
+                           y=self.y_voltages,
                            current_response_info=self.current_response_info)
 
     def generate_voltage_clamp_function(self, protocol):
         def voltage_clamp(t, y):
-            y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
+            if self.is_exp_artefact:
+                y[26] = protocol.get_voltage_at_time(t)
+            else:
+                y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
             return self.action_potential_diff_eq(t, y)
 
         return voltage_clamp

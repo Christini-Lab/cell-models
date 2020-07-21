@@ -5,8 +5,9 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 
-from cell_models import protocols
+from cell_models import protocols 
 from cell_models import trace
+from cell_models.current_models import ExperimentalArtefacts
 
 class CellModel:
     """An implementation a general cell model
@@ -54,6 +55,78 @@ class CellModel:
         self.d_y_voltage = []
         self.current_response_info = None
         self.full_y = []
+
+        if is_exp_artefact:
+            """
+            differential equations for Kernik iPSC-CM model
+            solved by ODE15s in main_ipsc.m
+
+            # State variable definitions:
+            # 0: Vm (millivolt)
+
+            # Ionic Flux: ---------------------------------------------------------
+            # 1: Ca_SR (millimolar)
+            # 2: Cai (millimolar)
+            # 3: Nai (millimolar)
+            # 4: Ki (millimolar)
+
+            # Current Gating (dimensionless):--------------------------------------
+            # 5: y1    (I_K1 Ishihara)
+            # 6: d     (activation in i_CaL)
+            # 7: f1    (inactivation in i_CaL)
+            # 8: fCa   (calcium-dependent inactivation in i_CaL)
+            # 9: Xr1   (activation in i_Kr)
+            # 10: Xr2  (inactivation in i_Kr
+            # 11: Xs   (activation in i_Ks)
+            # 12: h    (inactivation in i_Na)
+            # 13: j    (slow inactivation in i_Na)
+            # 14: m    (activation in i_Na)
+            # 15: Xf   (inactivation in i_f)
+            # 16: s    (inactivation in i_to)
+            # 17: r    (activation in i_to)
+            # 18: dCaT (activation in i_CaT)
+            # 19: fCaT (inactivation in i_CaT)
+            # 20: R (in Irel)
+            # 21: O (in Irel)
+            # 22: I (in Irel)
+
+            # With experimental artefact --------------------------------------
+            # 23: Vp (millivolt)
+            # 24: Vclamp (millivolt)
+            # 25: Iout (nA)
+            # 26: Vcmd (millivolt)
+            """
+            self.exp_artefacts = ExperimentalArtefacts()
+
+            e_leak = 0 #mV
+            # Change g_leak
+            g_leak = 1/6 * default_parameters['G_seal_leak'] #1/Gohms
+
+            # Change v_off
+            v_off_shift = np.log10(default_parameters['V_off']) * 10
+            v_off = -2.8 + v_off_shift  #mV
+
+            c_p = 4 #pf
+            r_pipette = 3E-3 #Gohms
+            c_m = 60 # pf
+
+
+            self.artefact_parameters = {'g_leak': g_leak,
+                                        'e_leak': e_leak,
+                                        'v_off': v_off,
+                                        'c_p': c_p,
+                                        'r_pipette': r_pipette,
+                                        'c_m': c_m}
+
+            v_p_initial = 100 #mV
+            v_clamp_initial = 100 #mV
+            i_out_initial = 1
+            v_cmd_initial = -80 #mV
+
+            self.y_initial = np.append(self.y_initial, v_p_initial)
+            self.y_initial = np.append(self.y_initial, v_clamp_initial)
+            self.y_initial = np.append(self.y_initial, i_out_initial)
+            self.y_initial = np.append(self.y_initial, v_cmd_initial)
 
     @property
     def no_ion_selective(self):

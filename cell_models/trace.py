@@ -344,24 +344,24 @@ class Trace:
 
         return [self.last_ap.t.iloc[dv_dt_diff.idxmax()], dv_dt_diff.idxmax()]
 
-    def get_last_ap(self, is_peak=True):
-        if is_peak:
-            inds = argrelextrema(self.y, np.greater)
-            bounds = inds[0][-4:-2]
-            
-            start_idx = np.abs(self.t - (self.t[bounds[0]] - 30.0)).argmin()
-            end_idx = np.abs(self.t - (self.t[bounds[1]] - 30.0)).argmin()
-        else:
-            inds = argrelextrema(self.y, np.greater, order=60)
-            cycle = self.t[inds[0][-3]] - self.t[inds[0][-4]]
-            cycle_25p = cycle *.25
-            start_time = self.t[inds[0][-3]] - cycle_25p
-            end_time = start_time + cycle
+    def get_last_ap(self):
+        dv_dt = np.diff(self.y) / np.diff(self.t)
 
-            start_idx = np.abs(self.t - start_time).argmin()
-            end_idx = np.abs(self.t - end_time).argmin()
+        dv_dt_inds = argrelextrema(dv_dt, np.greater, order=450)
+        bounds = dv_dt_inds[0][-4:-2]
 
-        self.last_ap = pd.DataFrame({'t': self.t[start_idx:end_idx],
+        #plt.plot(self.t, self.y)
+        #plt.plot(self.t[dv_dt_inds], self.y[dv_dt_inds])
+
+        cycle = self.t[bounds[1]] - self.t[bounds[0]]
+        cycle_25p = cycle *.25
+        start_time = self.t[bounds[0]] - cycle_25p
+        end_time = start_time + cycle
+
+        start_idx = np.abs(self.t - start_time).argmin()
+        end_idx = np.abs(self.t - end_time).argmin()
+
+        self.last_ap = pd.DataFrame({'t': self.t[start_idx:end_idx] - self.t[bounds[0]],
                                     'V': self.y[start_idx:end_idx]})
 
         return self.last_ap

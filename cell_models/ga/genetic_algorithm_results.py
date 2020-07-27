@@ -145,13 +145,14 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         baseline_trace: The baseline trace of the genetic algorithm run.
     """
 
-    def __init__(self, model, target, all_individuals,
+    def __init__(self, model, target, target_params, all_individuals,
                  config: ga_configs.ParameterTuningConfig,
                  time_conversion=1) -> None:
         super().__init__(all_individuals)
         self.config = config
         self.model = model
         self.target = target
+        self.target_params = target_params
         self.all_individuals = all_individuals
         self.time_conversion = time_conversion
 

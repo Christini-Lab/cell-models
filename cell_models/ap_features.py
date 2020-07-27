@@ -15,3 +15,10 @@ def get_ap_duration(t, v_m):
     apd_90 = t[v_90_idx] - t[dvdt_max_idx]
 
     return apd_90
+
+def get_ap_amplitude(t, v_m):
+    v_min = v_m.min()
+    v_max = v_m.max()
+
+    return v_max - v_min
+

@@ -65,6 +65,7 @@ class GAParams():
         self.vc_config = vc_config
         self.protocols = protocols
         self.previous_population = None
+        self.target_params = None
 
 def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
     """
@@ -84,22 +85,25 @@ def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
 
 
     if not is_baseline:
-        print("Taking random trace with index 5")
-        random_ss = np.load(pkg_resources.resource_stream(
-            __name__, "models_at_ss.npy"), allow_pickle=True)
+        if ga_params.vc_config.with_exp_artefact:
+            random_ss = np.load(pkg_resources.resource_stream(
+                __name__, "models_at_ss_artefact.npy"), allow_pickle=True)
+        else:
+            random_ss = np.load(pkg_resources.resource_stream(
+                __name__, "models_at_ss.npy"), allow_pickle=True)
 
-        index = 5
+        index = random.randint(0, 8)
+
+        print(f"Taking random trace with index {index}")
 
         target_cell = ga_params.cell_model(
             updated_parameters=random_ss[index][0],
             is_exp_artefact=ga_params.vc_config.with_exp_artefact)
 
-        if ga_params.vc_config.with_exp_artefact:
-            target_cell.y_initial[0:23] = random_ss[index][1]
-            target_cell.y_ss = target_cell.y_initial
-        else:
-            target_cell.y_initial = random_ss[index][1]
-            target_cell.y_ss = random_ss[index][1]
+        GA_PARAMS.target_params = random_ss[index][0]
+
+        target_cell.y_initial = random_ss[index][1]
+        target_cell.y_ss = random_ss[index][1]
 
     else:
         target_cell = ga_params.cell_model(
@@ -203,7 +207,9 @@ def run_ga(ga_params, toolbox):
         generate_statistics(population)
     
     final_ga_results = genetic_algorithm_results.GAResultParameterTuning(
-            'kernik', TARGETS, final_population, GA_PARAMS.vc_config)
+            'kernik', TARGETS, GA_PARAMS.target_params,
+            final_population, GA_PARAMS.vc_config,
+            )
 
     return final_ga_results
 

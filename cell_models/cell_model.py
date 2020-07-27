@@ -32,10 +32,11 @@ class CellModel:
         self.concentration_indices = concentration_indices
         self.i_stimulation = 0
         self.is_exp_artefact = is_exp_artefact
-
+        
 
         if updated_parameters:
             self.default_parameters.update(updated_parameters)
+
         if no_ion_selective_dict:
             self.no_ion_selective = no_ion_selective_dict
             self.is_no_ion_selective = True
@@ -208,6 +209,7 @@ class CellModel:
             else:
                 y_val = self.get_last_min_max(from_peak)
             self.y_initial = self.y[:, -1]
+            self.t = []
             y_values.append(y_val)
             y_percent = []
 
@@ -393,9 +395,16 @@ class CellModel:
     def generate_voltage_clamp_function(self, protocol):
         def voltage_clamp(t, y):
             if self.is_exp_artefact:
-                y[26] = protocol.get_voltage_at_time(t)
+                try:
+                    y[26] = protocol.get_voltage_at_time(t)
+                except:
+                    y[26] = 20000
             else:
-                y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
+                try:
+                    y[self.default_voltage_position] = protocol.get_voltage_at_time(t)
+                except:
+                    y[self.default_voltage_position] = 2000 
+
             return self.action_potential_diff_eq(t, y)
 
         return voltage_clamp

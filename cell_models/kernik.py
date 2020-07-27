@@ -36,7 +36,7 @@ class KernikModel(CellModel):
     def __init__(self, default_parameters=None,
                  updated_parameters=None,
                  no_ion_selective_dict=None,
-                 default_time_unit='ms', 
+                 default_time_unit='ms',
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
                                         'Nai': 3, 'Ki': 4},
@@ -217,8 +217,8 @@ class KernikModel(CellModel):
                 'I_leak':  i_leak
             }
             for curr_name, scale in self.no_ion_selective.items():
-                if curr_name == 'I_K1':
-                    i_no_ion += scale * i_K1_ishi
+                if curr_name == 'I_K1_Ishi':
+                    i_no_ion += scale * Ishi.I_K1(y[0], E_K, y[5], self.Ko, 1)[0]
                 else:
                     i_no_ion += scale * current_dictionary[curr_name]
 

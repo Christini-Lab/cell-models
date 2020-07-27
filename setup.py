@@ -7,7 +7,7 @@ setuptools.setup(
     name="cell_models", # Replace with your own username
     version="0.0.1",
     author="Alex Clark",
-    author_email="apclarkva@gmail",
+    author_email="apclarkva@gmail.com",
     description="This package contains cell models and the ability to apply various protocols to them.",
     long_description=long_description,
     long_description_content_type="text/markdown",

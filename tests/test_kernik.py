@@ -14,6 +14,7 @@ class TestKernik(unittest.TestCase):
         """
         Test if the baseline model generates a valid response
         """
+        model_baseline = kernik.KernikModel()
         model_baseline_artefact = kernik.KernikModel(
             updated_parameters={"I_Na": 2},
             is_exp_artefact=True)
@@ -25,10 +26,13 @@ class TestKernik(unittest.TestCase):
             is_exp_artefact=True)
 
 
+        spontaneous_protocol = protocols.SpontaneousProtocol(1500)
+
         simple_protocol = protocols.VoltageClampProtocol([
             protocols.VoltageClampStep(voltage=-80, duration=1000),
             protocols.VoltageClampStep(voltage=1, duration=1000)])
 
+        tr_baseline = model_baseline.generate_response(spontaneous_protocol)
         tr_base = model_baseline_artefact.generate_response(simple_protocol)
         tr_leak = model_new_leak.generate_response(simple_protocol)
         tr_v_off = model_new_v_off.generate_response(simple_protocol)

@@ -366,64 +366,36 @@ class Trace:
 
         return self.last_ap
 
-    def plot(self):
-        plt.figure(figsize=(10, 5))
-        ax = plt.subplot()
-        plt.plot(
-            [i * 1000 for i in self.t],
-            [i * 1000 for i in self.y],
-            color='b')
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        plt.xlabel('Time (ms)')
-        plt.ylabel(r'$V_m$ (mV)')
-
-    def plot_just_currents(self, title=None):
-        plt.plot(
-            [1000 * i for i in self.t],
-            [i * 1000 for i in self.current_response_info.get_current_summed()],
-            'r--',
-            label='Current')
-        plt.ylabel(r'$I_m$ (pA/pF)')
-
-        ax_1.spines['top'].set_visible(False)
-        plt.show()
-
-    def plot_with_currents(self, title=None, label=None):
+    def plot_with_currents(self, title="Voltage and Current"):
         if not self.current_response_info:
             return ValueError('Trace does not have current info stored. Trace '
                               'was not generated with voltage clamp protocol.')
-        fig, (ax_1, ax_2) = plt.subplots(1, 2, num=1)
+        fig, (ax_1, ax_2) = plt.subplots(2, 1, num=1, sharex=True, figsize=(12, 8))
 
         ax_1.plot(
             [i for i in self.t],
             [i for i in self.y],
-            'b',
-            label='Voltage')
-        plt.xlabel('Time (ms)')
-        plt.ylabel(r'$V_m$ (mV)')
+            'b')
+        ax_1.set_ylabel(r'$V_m$ (mV)', fontsize=18)
         
-        plt.legend()
-
         ax_2.plot(
             [i for i in self.t],
             [i for i in self.current_response_info.get_current_summed()],
-            '--',
-            label=label)
-        ax_2.yaxis.tick_right()
-        ax_2.yaxis.set_label_position("right")
-        plt.ylabel(r'$I_m$ (nA/nF)')
+            '--')
+        ax_2.set_ylabel(r'$I_m$ (nA/nF)', fontsize=18)
+        ax_2.set_xlabel('Time (ms)', fontsize=18)
 
         ax_1.spines['top'].set_visible(False)
+        ax_1.spines['right'].set_visible(False)
+        ax_2.spines['top'].set_visible(False)
+        ax_2.spines['right'].set_visible(False)
+
+        for ax in [ax_1, ax_2]:
+            ax.tick_params(axis="x", labelsize=14)
+            ax.tick_params(axis="y", labelsize=14)
+
         if title:
-            plt.title(r'{}'.format(title))
-
-    def plot_only_currents(self, label="None", time_conversion=1.0):
-        if not self.current_response_info:
-            return ValueError('Trace does not have current info stored. Trace '
-                              'was not generated with voltage clamp protocol.')
-
-        plt.plot(self.t*time_conversion, self.current_response_info.get_current_summed(), label=label)
+            fig.suptitle(r'{}'.format(title), fontsize=22)
 
     def adjust_sampling(self, frequency=1000):
         """
@@ -517,14 +489,15 @@ class Trace:
         else: 
             plt.savefig(saved_to)
 
-    def plot_with_individual_currents(self, currents, with_artefacts=False):
+    def plot_with_individual_currents(self, currents,
+                                      with_artefacts=False, is_shown=True):
         """
         Plots the voltage on tope, then the current response of each
         input current.
         """
         num_subplots = len(currents) + 2 # +2 for Vm and Total current
         #create subplots
-        fig, axs = plt.subplots(num_subplots, 1, sharex=True)
+        fig, axs = plt.subplots(num_subplots, 1, sharex=True, figsize=(12, 8))
 
         axs[0].plot(
             [i for i in self.t],
@@ -567,4 +540,5 @@ class Trace:
             axs[current_ax].legend()
 
         axs[-1].set_xlabel("Time (ms)")
-        plt.show() 
+        if is_shown:
+            plt.show()

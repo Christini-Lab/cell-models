@@ -489,7 +489,7 @@ class Trace:
         else: 
             plt.savefig(saved_to)
 
-    def plot_with_individual_currents(self, currents,
+    def plot_with_individual_currents(self, currents=[],
                                       with_artefacts=False, is_shown=True):
         """
         Plots the voltage on tope, then the current response of each
@@ -531,13 +531,14 @@ class Trace:
                 label=r'$I_{ion}$')
             axs[1].set_ylabel(r'$I_m$ (nA/nF)')
 
-        for i, current in enumerate(currents):
-            i_curr = self.current_response_info.get_current([current])
-            current_ax = 2 + i
-            axs[current_ax].plot([i for i in self.t], [i for i in i_curr],
-            label=current)
-            axs[current_ax].set_ylabel(f'{current} (pA/pF)')
-            axs[current_ax].legend()
+        if not (len(currents) == 0):
+            for i, current in enumerate(currents):
+                i_curr = self.current_response_info.get_current([current])
+                current_ax = 2 + i
+                axs[current_ax].plot([i for i in self.t], [i for i in i_curr],
+                label=current)
+                axs[current_ax].set_ylabel(f'{current} (pA/pF)')
+                axs[current_ax].legend()
 
         axs[-1].set_xlabel("Time (ms)")
         if is_shown:

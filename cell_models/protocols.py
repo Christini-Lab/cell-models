@@ -27,7 +27,7 @@ class PacedProtocol:
             self.stim_amplitude = 80
             self.stim_duration = 1
         elif (model_name == "Paci"):
-            self.stim_amplitude = 220 
+            self.stim_amplitude = 220
             self.stim_duration = 5/1000
 
         self.pace = pace

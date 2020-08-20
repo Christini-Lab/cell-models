@@ -191,7 +191,7 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         plt.ylabel(r'$V_m$ (mV)')
         return trace
 
-    def graph_individual_param_set(self, individual, fig=None, ax=None):
+    def graph_individual_param_set(self, individual, y_max=10, y_min=0, is_log=False, fig=None, ax=None):
         """Graphs an individual's parameters.
         """
         if fig is None:
@@ -199,19 +199,30 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
 
         parameter_indices = [k.name for k in self.config.tunable_parameters]
         params_underscore = [f'${i[0:2]}{{{i[2:]}}}$' for i in parameter_indices]
-        
-        parameter_vals = [individual.parameters[k] for k in parameter_indices]
+
+        if is_log:
+            parameter_vals = [np.log10(individual.parameters[k]) for k in
+                              parameter_indices]
+            y_max = np.log10(y_max)
+            y_min = np.log10(y_min)
+            baseline = 0
+            y_label = 'Log10(Scaled Conductance)'
+        else:
+            parameter_vals = [individual.parameters[k] for k in parameter_indices]
+            baseline = 1
+            y_label = 'Scaled Conductance'
 
         x = parameter_indices
         y = np.array(parameter_vals)
-        color = np.where(y >= 1, 'green', 'red')
+        color = np.where(y >= baseline, 'green', 'red')
         #plt.vlines(x=x, ymin=1, ymax=y, color=color, alpha=0.75, linewidth=5)
         plt.scatter(x, y, color=color, s=20, alpha=1)
-        plt.axhline(1, linewidth=0.5, linestyle='--', color='gray')
+        plt.axhline(baseline, linewidth=0.5, linestyle='--', color='gray')
         plt.xlabel('Parameters', fontsize=20)
-        plt.ylabel('Scaled Conductance', fontsize=20)
+        plt.ylabel(y_label, fontsize=20)
         plt.xticks(parameter_indices, params_underscore)
-        plt.yticks([i for i in range(0, 11)], [i for i in range(0, 11)])
+        #plt.yticks([i for i in range(0, y_max)], [i for i in range(0, y_max)])
+        plt.ylim([y_min, y_max])
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
 

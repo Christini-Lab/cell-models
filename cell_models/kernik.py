@@ -66,7 +66,8 @@ class KernikModel(CellModel):
             'G_b_Ca': 1,
             'G_PCa': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'pipette_scale': 1
         }
 
         y_initial = kernik_model_initial()
@@ -226,10 +227,7 @@ class KernikModel(CellModel):
         # Experimental Artefact
         if self.is_exp_artefact:
             ### Simple
-            i_ion = self.exp_artefacts.c_m_star*(-(i_K1+i_to+i_Kr+
-                i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa +
-                      i_PCa+i_f+i_b_Na+i_b_Ca +
-                      i_K1_ishi + i_no_ion) + self.i_stimulation)
+            i_ion = self.exp_artefacts.c_m_star*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
 
             i_seal_leak = self.exp_artefacts.get_i_leak(
                     self.artefact_parameters['g_leak'],
@@ -237,12 +235,12 @@ class KernikModel(CellModel):
 
             i_out = i_ion + i_seal_leak
 
-            v_p = y[26] + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out
+            v_p = y[26] + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out * self.default_parameters['pipette_scale']
 
             dvm_dt = self.exp_artefacts.get_dvm_dt(
                     self.artefact_parameters['c_m'], 
                     self.artefact_parameters['v_off'],
-                    self.artefact_parameters['r_pipette'],
+                    self.artefact_parameters['r_pipette'] * self.default_parameters['pipette_scale'],
                     v_p, y[0], i_ion, i_seal_leak)
 
             i_ion = i_ion / self.exp_artefacts.c_m_star
@@ -254,7 +252,11 @@ class KernikModel(CellModel):
 
             d_y[0] = dvm_dt
 
+
             if self.current_response_info:
+                #if (y[0] > 0) and (t > 3300):
+                #    import pdb
+                #    pdb.set_trace()
                 current_timestep = [
                     trace.Current(name='I_K1', value=i_K1),
                     trace.Current(name='I_To', value=i_to),

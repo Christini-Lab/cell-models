@@ -5,9 +5,9 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 
-from cell_models import protocols 
-from cell_models import trace
+from cell_models import protocols, trace
 from cell_models.current_models import ExperimentalArtefacts
+
 
 class CellModel:
     """An implementation a general cell model
@@ -138,7 +138,7 @@ class CellModel:
         self.__no_ion_selective = no_ion_selective
 
     def calc_currents(self):
-        self.current_response_info = trace.CurrentResponseInfo()      
+        self.current_response_info = trace.CurrentResponseInfo()
         if len(self.y) < 200:
             list(map(self.action_potential_diff_eq, self.t, self.y.transpose()))
         else:
@@ -162,8 +162,9 @@ class CellModel:
         self.current_response_info = None
 
         self.is_no_ion_selective = is_no_ion_selective
-
-
+        
+        from cell_models.rtxi.target_objective import TargetObjective
+        
         if isinstance(protocol, protocols.SpontaneousProtocol):
             return self.generate_spontaneous_response(protocol)
         elif isinstance(protocol, protocols.IrregularPacingProtocol):
@@ -172,6 +173,12 @@ class CellModel:
             return self.generate_VC_protocol_response(protocol)
         elif isinstance(protocol, protocols.PacedProtocol):
             return self.generate_pacing_response(protocol)
+        elif isinstance(protocol, TargetObjective):
+            if protocol.protocol_type == "Voltage Clamp":
+                return self.generate_exp_voltage_clamp(protocol)
+            elif protocol.protocol_type == "Dynamic Clamp":
+                return self.generate_exp_current_clamp(protocol)
+
 
     def find_steady_state(self, ss_type=None, from_peak=False, time_unit='ms', tol = 1E-3, max_iters=140):
         """
@@ -351,6 +358,112 @@ class CellModel:
             return d_y
 
         return irregular_pacing
+
+    def generate_exp_voltage_clamp(self, exp_target):
+        """
+        Args:
+            protocol: A voltage clamp protocol
+        Returns:
+            A Trace object for a voltage clamp protocol
+        """
+        if self.y_ss is not None:
+            y_init = self.y_ss
+        else:
+            y_init = self.y_initial
+
+        self.current_response_info = trace.CurrentResponseInfo(
+            protocol=exp_target)
+
+        solution = integrate.solve_ivp(
+            self.generate_exp_voltage_clamp_function(exp_target),
+            [0, floor(exp_target.time.max())],
+            y_init,
+            method='BDF',
+            max_step=1e-3*self.time_conversion)
+
+        self.t = solution.t
+        self.y = solution.y
+
+        command_voltages = [exp_target.get_voltage_at_time(t) for t in self.t]
+        self.command_voltages = command_voltages
+
+        if self.is_exp_artefact:
+            self.y_voltages = self.y[0, :]
+        else:
+            self.y_voltages = command_voltages
+
+        self.calc_currents()
+
+        #import matplotlib.pyplot as plt
+        #plt.plot(self.t, self.command_voltages)
+        #plt.plot(self.t, self.y_voltages)
+        #plt.show()
+
+        return trace.Trace(self.t,
+                           command_voltages=self.command_voltages,
+                           y=self.y_voltages,
+                           current_response_info=self.current_response_info)
+
+    def generate_exp_voltage_clamp_function(self, exp_target):
+        def voltage_clamp(t, y):
+            if self.is_exp_artefact:
+                try:
+                    y[26] = exp_target.get_voltage_at_time(t)
+                except:
+                    y[26] = 20000
+            else:
+                try:
+                    y[self.default_voltage_position] = exp_target.get_voltage_at_time(t)
+                except:
+                    y[self.default_voltage_position] = 2000
+
+            return self.action_potential_diff_eq(t, y)
+
+        return voltage_clamp
+
+    def generate_exp_current_clamp(self, exp_target):
+        """
+        Args:
+            protocol: A voltage clamp protocol
+        Returns:
+            A Trace object for a voltage clamp protocol
+        """
+        if self.y_ss is not None:
+            y_init = self.y_ss
+        else:
+            y_init = self.y_initial
+
+        self.current_response_info = trace.CurrentResponseInfo(
+            protocol=exp_target)
+
+        solution = integrate.solve_ivp(
+            self.generate_exp_dynamic_clamp_function(exp_target),
+            [0, floor(exp_target.time.max())],
+            y_init,
+            method='BDF',
+            max_step=1e-3*self.time_conversion)
+
+        self.t = solution.t
+        self.y = solution.y
+
+        self.y_voltages = self.y[0, :]
+
+        self.calc_currents()
+
+        return trace.Trace(self.t,
+                           y=self.y_voltages,
+                           current_response_info=self.current_response_info)
+
+    def generate_exp_dynamic_clamp_function(self, exp_target):
+        def dynamic_clamp(t, y):
+            self.i_stimulation = -exp_target.get_current_at_time(t)
+            
+            d_y = self.action_potential_diff_eq(t, y)
+
+            return d_y
+
+        return dynamic_clamp
+
 
     def generate_VC_protocol_response(self, protocol):
         """

@@ -5,3 +5,5 @@ dist
 *.egg-info
 build
 cell_models/__pycache__
+tests/input_data
+cell_models/rtxi/__pychache__

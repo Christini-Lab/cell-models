@@ -26,10 +26,10 @@ class KernikModel(CellModel):
 
     # Constants
     t_kelvin = 310.0  
-    r_joule_per_mole_kelvin = 8.314472   
-    f_coulomb_per_mmole = 96.4853415  
+    r_joule_per_mole_kelvin = 8.314472
+    f_coulomb_per_mmole = 96.4853415
 
-    Ko = 5.4  # millimolar (in model_parameters)
+    Ko = 5.4 # millimolar (in model_parameters)
     Cao = 1.8  # millimolar (in model_parameters
     Nao = 140.0  # millimolar (in model_parameters)
 
@@ -40,11 +40,13 @@ class KernikModel(CellModel):
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
                                         'Nai': 3, 'Ki': 4},
-                 is_exp_artefact=False
+                 is_exp_artefact=False,
+                 ki_millimolar=None
                  ):
 
-        self.kernik_currents = KernikCurrents(self.t_kelvin,
-                                              self.f_coulomb_per_mmole, 
+        self.kernik_currents = KernikCurrents(self.Ko, self.Cao, self.Nao,
+                                              self.t_kelvin,
+                                              self.f_coulomb_per_mmole,
                                               self.r_joule_per_mole_kelvin)
 
         default_parameters = {
@@ -71,6 +73,8 @@ class KernikModel(CellModel):
         }
 
         y_initial = kernik_model_initial()
+        
+        self.ki_millimolar = ki_millimolar
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
@@ -115,6 +119,11 @@ class KernikModel(CellModel):
         # 22: I (in Irel)
         """
 
+        #if self.i_stimulation != 0:
+        #    if t > 1468:
+        #        import pdb
+        #        pdb.set_trace()
+
         if self.is_exp_artefact:
             d_y = np.zeros(27)
         else:
@@ -130,12 +139,15 @@ class KernikModel(CellModel):
             y[2] = 4.88E-5
             E_Ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Cao / y[2])  # millivolt
         E_Na = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Nao / y[3])  # millivolt
+
+        if self.ki_millimolar:
+            y[4] = self.ki_millimolar
         E_K = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mmole * log(self.Ko / y[4])  # millivolt
 
         # --------------------------------------------------------------------
         # Currents:
         i_K1 = self.kernik_currents.i_K1(y[0], E_K, self.default_parameters['G_K1'])
-        i_K1_ishi, d_y[5] = Ishi.I_K1(y[0], E_K, y[5], self.Ko, self.default_parameters['G_K1_Ishi']) 
+        i_K1_ishi, d_y[5] = Ishi.I_K1(y[0], E_K, y[5], self.Ko, self.default_parameters['G_K1_Ishi'])
 
         d_y[9], d_y[10], i_Kr = self.kernik_currents.i_Kr(
                 y[0], E_K, y[9], y[10], self.default_parameters['G_Kr'])
@@ -192,12 +204,12 @@ class KernikModel(CellModel):
         d_y[3] = self.kernik_currents.Nai_conc(i_Na, i_b_Na, i_fNa, i_NaK, i_NaCa, 
                                          i_CaL_Na, self.cm_farad, t)
 
-        #d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK,
-        #                                i_NaK, i_CaL_K, self.cm_farad)
-        d_y[4] = -d_y[3]
+        d_y[4] = self.kernik_currents.Ki_conc(i_K1, i_to, i_Kr, i_Ks, i_fK,
+                                        i_NaK, i_CaL_K, self.cm_farad)
+        #d_y[4] = -d_y[3]
 
         # --------------------------------------------------------------------
-        # Handling i_no_ion 
+        # Handling i_no_ion
         i_no_ion = 0
         if self.is_no_ion_selective:
             current_dictionary = {
@@ -254,11 +266,9 @@ class KernikModel(CellModel):
 
 
             if self.current_response_info:
-                #if (y[0] > 0) and (t > 3300):
-                #    import pdb
-                #    pdb.set_trace()
                 current_timestep = [
                     trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_K1_Ishi', value=i_K1_ishi),
                     trace.Current(name='I_To', value=i_to),
                     trace.Current(name='I_Kr', value=i_Kr),
                     trace.Current(name='I_Ks', value=i_Ks),
@@ -278,7 +288,8 @@ class KernikModel(CellModel):
                     trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_Cm', value=i_cm),
                     trace.Current(name='I_Cp', value=i_cp),
-                    trace.Current(name='I_in', value=i_in)
+                    trace.Current(name='I_in', value=i_in),
+                    trace.Current(name='I_no_ion', value=i_no_ion),
                 ]
                 self.current_response_info.currents.append(current_timestep)
 
@@ -291,6 +302,7 @@ class KernikModel(CellModel):
             if self.current_response_info:
                 current_timestep = [
                     trace.Current(name='I_K1', value=i_K1),
+                    trace.Current(name='I_K1_Ishi', value=i_K1_ishi),
                     trace.Current(name='I_To', value=i_to),
                     trace.Current(name='I_Kr', value=i_Kr),
                     trace.Current(name='I_Ks', value=i_Ks),
@@ -304,9 +316,12 @@ class KernikModel(CellModel):
                     trace.Current(name='I_bCa', value=i_b_Ca),
                     trace.Current(name='I_CaT', value=i_CaT),
                     trace.Current(name='I_up', value=i_up),
-                    trace.Current(name='I_leak', value=i_leak)
+                    trace.Current(name='I_leak', value=i_leak),
+                    trace.Current(name='I_no_ion', value=i_no_ion),
+                    trace.Current(name='I_stim', value=self.i_stimulation)
                 ]
                 self.current_response_info.currents.append(current_timestep)
+
 
         return d_y
 

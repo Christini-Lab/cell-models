@@ -143,8 +143,14 @@ class CurrentResponseInfo:
 
     def get_current_summed(self):
         current = []
-        for i in self.currents:
-            current.append(sum([j.value for j in i]))
+        current_names = [p.name for p in self.currents[0]]
+
+        if 'I_out' in current_names:
+            for i in self.currents:
+                current.append([j.value for j in i if j.name == 'I_out'][0])
+        else:
+            for i in self.currents:
+                current.append(sum([j.value for j in i]))
 
         #current = [i / 100 for i in current]
         #median_current = np.median(current)
@@ -306,7 +312,9 @@ class Trace:
                  y: List[float],
                  command_voltages=None,
                  pacing_info: IrregularPacingInfo=None,
-                 current_response_info: CurrentResponseInfo=None) -> None:
+                 current_response_info: CurrentResponseInfo=None,
+                 voltages_with_offset=None,
+                 default_unit=None) -> None:
 
         self.is_interpolated = False
         self.t = np.array(t)
@@ -315,6 +323,8 @@ class Trace:
         self.current_response_info = current_response_info
         self.last_ap = None
         self.command_voltages = command_voltages
+        self.voltages_with_offset = voltages_with_offset
+        self.default_unit = default_unit
 
     def get_cl(self):
         if self.last_ap is None:
@@ -350,9 +360,6 @@ class Trace:
         dv_dt_inds = argrelextrema(dv_dt, np.greater, order=450)
         bounds = dv_dt_inds[0][-4:-2]
 
-        #plt.plot(self.t, self.y)
-        #plt.plot(self.t[dv_dt_inds], self.y[dv_dt_inds])
-
         cycle = self.t[bounds[1]] - self.t[bounds[0]]
         cycle_25p = cycle *.25
         start_time = self.t[bounds[0]] - cycle_25p
@@ -362,9 +369,10 @@ class Trace:
         end_idx = np.abs(self.t - end_time).argmin()
 
         self.last_ap = pd.DataFrame({'t': self.t[start_idx:end_idx] - self.t[bounds[0]],
-                                    'V': self.y[start_idx:end_idx]})
+                                    'V': self.y[start_idx:end_idx],
+                                    'I': self.current_response_info.get_current_summed()[start_idx:end_idx]})
 
-        return self.last_ap
+        return self.last_ap, [start_idx, end_idx], self.t[bounds[0]]
 
     def plot_with_currents(self, title="Voltage and Current"):
         if not self.current_response_info:
@@ -504,7 +512,6 @@ class Trace:
             [i for i in self.y],
             label=r'$V_m$')
         axs[0].set_ylabel('Voltage (mV)')
-
 
         if with_artefacts:
             axs[0].plot(

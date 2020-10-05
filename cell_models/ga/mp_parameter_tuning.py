@@ -22,14 +22,15 @@ import pkg_resources
 import matplotlib.pyplot as plt
 
 from cell_models.kernik import KernikModel
+from cell_models.paci_2018 import PaciModel
 from cell_models import kernik
 from cell_models import protocols
 from cell_models import trace
 
-from cell_models.ga import target_objective
 from cell_models.rtxi.target_objective import TargetObjective
 from cell_models.ga import ga_configs
 from cell_models.ga import genetic_algorithm_results
+from cell_models.ga.model_target_objective import ModelTarget
 
 
 class GAParams():
@@ -62,6 +63,8 @@ class GAParams():
         """
         if model_name == "Kernik":
             self.cell_model = KernikModel
+        elif model_name == "Paci":
+            self.cell_model = PaciModel
 
         self.vc_config = vc_config
         self.protocols = protocols
@@ -138,10 +141,10 @@ def run_ga(ga_params, toolbox):
 
     population = toolbox.population(ga_params.vc_config.population_size)
 
-    protocols = [copy.deepcopy(ga_params.vc_config.protocols) for i in range(
+    targets = [copy.deepcopy(ga_params.vc_config.targets) for i in range(
         0, ga_params.vc_config.population_size)]
 
-    eval_input = np.transpose([population, protocols])
+    eval_input = np.transpose([population, targets])
 
     fitnesses = toolbox.map(toolbox.evaluate, eval_input)
    
@@ -154,7 +157,7 @@ def run_ga(ga_params, toolbox):
         initial_population.append(
             genetic_algorithm_results.ParameterTuningIndividual(
                 parameters=population[i][0].default_parameters,
-                fitness=population[i].fitness.values[0]))
+                fitness=population[i].fitness.values))
 
     final_population = [initial_population]
 
@@ -185,30 +188,15 @@ def run_ga(ga_params, toolbox):
         # mutation, will be re-evaluated.
         updated_individuals = [i for i in offspring if not i.fitness.values]
 
-        protocols = [copy.deepcopy(ga_params.vc_config.protocols) for i in
+        targets = [copy.deepcopy(ga_params.vc_config.targets) for i in
                      range(0, len(updated_individuals))]
 
-        eval_input = np.transpose([updated_individuals, protocols])
+        eval_input = np.transpose([updated_individuals, targets])
 
         fitnesses = toolbox.map(toolbox.evaluate, eval_input)
 
         for ind, fit in zip(updated_individuals, fitnesses):
             ind.fitness.values = fit
-
-        #import pdb
-        #pdb.set_trace()
-
-        #[print(o.fitness) for o in offspring]
-        #_evaluate_recovery([offspring[-1], TARGETS])
-
-        #t = [t for t in TARGETS.values()][0]
-        #offspring[12][0].default_parameters['G_Ks'] = 70
-        #tr_good = get_model_response(offspring[12][0], t)
-        #tr_bad = get_model_response(offspring[9][0], t)
-        #plt.plot(tr_good.t, tr_good.current_response_info.get_current_summed())
-        #plt.plot(tr_bad.t, tr_bad.current_response_info.get_current_summed())
-        #plt.plot(t.time, t.current)
-        #plt.show()
 
         population = offspring
 
@@ -218,19 +206,23 @@ def run_ga(ga_params, toolbox):
             intermediate_population.append(
                 genetic_algorithm_results.ParameterTuningIndividual(
                     parameters=population[i][0].default_parameters,
-                    fitness=population[i].fitness.values[0]))
+                    fitness=population[i].fitness.values))
 
         final_population.append(intermediate_population)
 
         generate_statistics(population)
 
-        fitness_values = [i.fitness.values[0] for i in population]
+        fitness_values = [i.fitness.values for i in population]
 
-        if len(avg_fitness) > 3:
-            if np.mean(fitness_values) >= max(avg_fitness[-3:]):
-                break
+        #TODO: create exit condition for all multi-objective
+        #if len(avg_fitness) > 3:
+        #    if len(fitness_values) > 1:
+        #        print('multiobjective')
+        #    if np.mean(fitness_values) >= max(avg_fitness[-3:]):
+        #        break
 
-        avg_fitness.append(np.mean(fitness_values))
+        #avg_fitness.append(np.mean(fitness_values))
+
     
     final_ga_results = genetic_algorithm_results.GAResultParameterTuning(
             'kernik', TARGETS, GA_PARAMS.target_params,
@@ -240,7 +232,7 @@ def run_ga(ga_params, toolbox):
     return final_ga_results
 
 
-def get_model_response(model, command, prestep=5000.0):
+def get_model_response(model, command, prestep=5000.0, is_command_prestep=True):
     """
     Parameters
     ----------
@@ -258,15 +250,37 @@ def get_model_response(model, command, prestep=5000.0):
     applies the protocol. The function returns a trace object with the 
     recording during the input protocol.
     """
-    prestep_protocol = protocols.VoltageClampProtocol(
-        [protocols.VoltageClampStep(voltage=-80.0,
-                                    duration=prestep)])
+    if is_command_prestep:
+        prestep_protocol = protocols.VoltageClampProtocol(
+            [protocols.VoltageClampStep(voltage=-80.0,
+                                        duration=prestep)])
+    else:
+        prestep_protocol = command
 
-    model.generate_response(prestep_protocol)
+    if isinstance(command, TargetObjective):
+        if command.protocol_type == 'Dynamic Clamp':
+            #TODO: Aperiodic Pacing Protocol
+            prestep_protocol = protocols.AperiodicPacingProtocol(
+                GA_PARAMS.vc_config.model_name)
+            command = prestep_protocol
+            model.generate_response(prestep_protocol,
+                        is_no_ion_selective=True)
+            response_trace = model.generate_response(command,
+                    is_no_ion_selective=True)
+        else:
+            model.generate_response(prestep_protocol,
+                        is_no_ion_selective=False)
+            model.y_ss = model.y[:, -1]
+            response_trace = model.generate_response(command.protocol,
+                    is_no_ion_selective=False)
+    else:
+        model.generate_response(prestep_protocol,
+                    is_no_ion_selective=False)
 
-    model.y_ss = model.y[:, -1]
+        model.y_ss = model.y[:, -1]
 
-    response_trace = model.generate_response(command)
+        response_trace = model.generate_response(command,
+                is_no_ion_selective=False)
 
     return response_trace
 
@@ -289,7 +303,7 @@ def _initialize_individuals(vc_config, cell_model):
     keys = [val.name for val in vc_config.tunable_parameters]
 
     return cell_model(
-        updated_parameters=dict(zip(keys, initial_params)), 
+        updated_parameters=dict(zip(keys, initial_params)),
         is_exp_artefact=vc_config.with_exp_artefact)
 
 
@@ -303,26 +317,48 @@ def _evaluate_recovery(eval_input):
                 The error between the trace generated by the individual's
                 parameter set and the baseline target objective.
     """
-    individual, commands = eval_input
-    individual_model = individual[0]
+    individual_model, input_commands = eval_input
+    individual_model = individual_model[0]
     y_initial = individual_model.y_initial
 
     errors = []
 
-    for current, command in commands.items():
+    for current_target, command in input_commands.items():
         individual_model.y_ss = None
         individual_model.y_initial = y_initial
 
-        try: 
-            new_trace = get_model_response(individual_model, command)
-        except:
-            print("Model errored")
-            errors.append(8)
-            continue
+        updated_parameters = individual_model.default_parameters
 
-        target = TARGETS[current]
-        
-        errors.append(log10(target.compare_individual(new_trace)))
+        try:
+            if command.protocol_type == 'Dynamic Clamp':
+                if isinstance(command, TargetObjective):
+                    g_k1_ishi = command.g_ishi
+                    individual_model = GA_PARAMS.cell_model(
+                            updated_parameters=updated_parameters,
+                            no_ion_selective_dict={'I_K1_Ishi': g_k1_ishi},
+                            is_exp_artefact=False)
+                else:
+                    individual_model = GA_PARAMS.cell_model(
+                            updated_parameters=updated_parameters,
+                            is_exp_artefact=False)
+
+                new_trace = get_model_response(individual_model,
+                                               command,
+                                               is_command_prestep=False)
+            else:
+                individual_model = GA_PARAMS.cell_model(
+                        updated_parameters=updated_parameters, 
+                        is_exp_artefact=GA_PARAMS.vc_config.with_exp_artefact)
+
+                new_trace = get_model_response(individual_model, command)
+
+            target = TARGETS[current_target]
+
+            error = target.compare_individual(new_trace)
+        except:
+            error = 10E8
+
+        errors.append(log10(error))
 
     return errors
 
@@ -369,9 +405,10 @@ def _mutate(individual):
             individual[0].default_parameters[key] = new_param
 
 def generate_statistics(population: List[List[List[float]]]) -> None:
-    for index, current in enumerate(list(GA_PARAMS.vc_config.protocols.keys())):
+    #for index, current in enumerate(list(GA_PARAMS.vc_config.protocols.keys())):
+    for index in range(0, len(population[0].fitness.values)):
         fitness_values = [i.fitness.values[index] for i in population]
-        print(f'Details for: {current}')
+        #print(f'Details for: {current}')
         print('\t\tMin fitness: {}'.format(min(fitness_values)))
         print('\t\tMax fitness: {}'.format(max(fitness_values)))
         print('\t\tAverage fitness: {}'.format(np.mean(fitness_values)))
@@ -379,15 +416,14 @@ def generate_statistics(population: List[List[List[float]]]) -> None:
 
 creator.create('FitnessMulti', base.Fitness, weights=(-1.0, -1.0, -1.0,
                                                     -1.0, -1.0, -1.0))
+
 creator.create('Individual', list, fitness=creator.FitnessMulti)
 
 def start_ga(target_objectives, vc_config, is_baseline=True):
     global GA_PARAMS
     global TARGETS
 
-    GA_PARAMS = GAParams('Kernik', vc_config, target_objectives)
-
-    list_targets = [target for target in target_objectives.values()]
+    GA_PARAMS = GAParams(vc_config.model_name, vc_config, target_objectives)
 
     toolbox = base.Toolbox()
     toolbox.register('init_param',
@@ -403,19 +439,14 @@ def start_ga(target_objectives, vc_config, is_baseline=True):
                      tools.initRepeat,
                      list,
                      toolbox.individual)
-    if isinstance(list_targets[0], TargetObjective):
-        TARGETS = target_objectives
-    else:
-        TARGETS = initialize_target(GA_PARAMS, is_baseline=is_baseline)
+
+    TARGETS = target_objectives
+
     toolbox.register('evaluate', _evaluate_recovery)
-    #if len(protocols.items()) > 1:
-    #    print("Treat as multi-objective")
-    #    toolbox.register('select', tools.selNSGA2)
-    #else:
-    #    print("Treat as having one objective")
     toolbox.register('select',
                      tools.selTournament,
                      tournsize=GA_PARAMS.vc_config.tournament_size)
+
     toolbox.register('mate', _mate)
     toolbox.register('mutate', _mutate)
 

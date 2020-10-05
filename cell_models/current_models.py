@@ -35,15 +35,17 @@ class KernikCurrents():
     Vc = V_tot * (Vc_tenT / V_tot_tenT)
     V_SR = V_tot * (VSR_tenT / V_tot_tenT)
 
-    def __init__(self, t_kelvin=310.0, f_coulomb_per_mmole=96.4853415,
+    def __init__(self, Ko, Cao, Nao, t_kelvin=310.0,
+                 f_coulomb_per_mmole=96.4853415,
                  r_joule_per_mole_kelvin=8.314472):
+        self.Ko = Ko # millimolar (in model_parameters)
+        self.Cao = Cao  # millimolar (in model_parameters
+        self.Nao = Nao  # millimolar (in model_parameters)
+
         self.t_kelvin = t_kelvin  
         self.r_joule_per_mole_kelvin = r_joule_per_mole_kelvin  
         self.f_coulomb_per_mmole = f_coulomb_per_mmole 
 
-        self.Ko = 5.4  # millimolar (in model_parameters)
-        self.Cao = 1.8  # millimolar (in model_parameters
-        self.Nao = 140.0  # millimolar (in model_parameters)
 
     def i_K1(self, v_m, E_K, g_K1):
         xK11 = self.x_K1[1]

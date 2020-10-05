@@ -99,7 +99,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
     VC_MAX_ERROR = 130
 
     def __init__(self,
-                 protocols,
+                 targets,
                  params_lower_bound: float,
                  params_upper_bound: float,
                  tunable_parameters: List[Parameter],
@@ -112,7 +112,8 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
                  tournament_size: int,
                  secondary_protocol: protocols.PROTOCOL_TYPE=None,
                  target_params=None,
-                 with_exp_artefact=False) -> None:
+                 with_exp_artefact=False,
+                 model_name=None) -> None:
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -121,13 +122,14 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
             gene_swap_probability=gene_swap_probability,
             gene_mutation_probability=gene_mutation_probability,
             tournament_size=tournament_size)
-        self.protocols = protocols
+        self.targets = targets 
         self.params_lower_bound = params_lower_bound
         self.params_upper_bound = params_upper_bound
         self.tunable_parameters = tunable_parameters
         self.secondary_protocol = secondary_protocol
         self.target_params = target_params
         self.with_exp_artefact = with_exp_artefact
+        self.model_name = model_name
 
     def has_equal_hyperparameters(self, other: 'ParameterTuningConfig') -> bool:
         return (super().has_equal_hyperparameters(other=other) and

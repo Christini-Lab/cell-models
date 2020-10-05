@@ -4,7 +4,7 @@ class RTXIMeta():
     """
     Holds all information for extracting data from an h5 file for processing and input into a GA.
     """
-    def __init__(self, file_path, trial, t_range, protocol_type):
+    def __init__(self, file_path, trial, t_range, protocol_type, max_current_ranges=None):
         """
         Parameters:
             file_path (str) – path to the h5 files
@@ -19,12 +19,19 @@ class RTXIMeta():
         self.t_range = t_range
         self.protocol_type = protocol_type
         self.mem_capacitance = get_cell_capacitance(self.file_path)
+        self.max_current_ranges = max_current_ranges
 
 def get_cell_capacitance(h5_file):
-    f = raw_exp_file = File(h5_file, 'r')
+    f = File(h5_file, 'r')
 
-    cm_key = [key for key in f['Trial1']['Parameters'].keys() if 'Cm' in key][0]
-    
-    cm = f['Trial1']['Parameters'][cm_key].value[0][1] * 1E-12
+    cm = 0
+
+    for k in f.keys():
+        if 'Trial' in k:
+            for k, v in f[k]['Parameters'].items():
+                if 'Cm' in k:
+                    cm_temp = f['Trial1']['Parameters'][k].value[0][1] * 1E-12
+                    if cm_temp > cm:
+                        cm = cm_temp
 
     return cm

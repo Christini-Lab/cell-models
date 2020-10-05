@@ -1,6 +1,8 @@
 from math import log, sqrt
 from typing import List
 from cell_models.cell_model import CellModel
+from cell_models.current_models import Ishi
+
 
 import numpy as np
 from scipy import integrate
@@ -48,8 +50,7 @@ class PaciModel(CellModel):
     ko_millimolar = 5.4
     cao_millimolar = 1.8
 
-    # Intracellular concentrations
-    ki_millimolar = 150.0
+    #ki_millimolar = 100.0
 
     # Other variables
     t_drug_application = 10000
@@ -61,11 +62,11 @@ class PaciModel(CellModel):
     y_names = [
         'Vm', 'Ca_SR', 'Cai', 'g', 'd', 'f1', 'f2', 'fCa', 'Xr1', 'Xr2', 'Xs',
         'h', 'j', 'm', 'Xf', 'q', 'r', 'Nai', 'm_L', 'h_L', 'RyRa', 'RyRo',
-        'RyRc'
+        'RyRc', 'y1'
     ]
     y_initial_zero = [
         -0.070, 0.32, 0.0002, 0, 0, 1, 1, 1, 0, 1, 0, 0.75, 0.75, 0, 0.1, 1, 0,
-        9.2, 0, 0.75, 0.3, 0.9, 0.1
+        9.2, 0, 0.75, 0.3, 0.9, 0.1, 0.000000000000000000e+00
     ]
 
     default_conductances={
@@ -84,9 +85,13 @@ class PaciModel(CellModel):
 
     def __init__(self, updated_parameters=None,
                  no_ion_selective_dict=None,
+                 is_exp_artefact=False,
+                 default_time_unit='s',
+                 default_voltage_unit='V',
                  concentration_indices={'Ca_SR': 1,
                                         'Cai': 2,
-                                        'Nai': 17}):
+                                        'Nai': 17},
+                 ki_millimolar=130):
         """Creates a Paci Model individual
 
         Leave `updated_parameters` argument empty if generating baseline trace
@@ -94,10 +99,11 @@ class PaciModel(CellModel):
 
         Args:
             updated_parameters: Dict of parameters with values to be updated.
-            no_ion_selective: Dict of no ion selective scaling factors. 
+            no_ion_selective: Dict of no ion selective scaling factors.
                 Baseline is equivalent to all no_ion_selective parameters
                 equal to zero
         """
+        self.ki_millimolar = ki_millimolar
 
         default_parameters = {
             'G_Na': 1,
@@ -106,11 +112,16 @@ class PaciModel(CellModel):
             'G_Ks': 1,
             'G_Kr': 1,
             'G_K1': 1,
+            'G_To': 1,
             'G_pCa': 1,
             'G_bNa': 1,
             'G_bCa': 1,
             'G_NaL': 1,
-            'K_NaCa': 1}
+            'K_NaCa': 1,
+            'G_seal_leak': 1,
+            'V_off': 1,
+            'pipette_scale': 1
+            }
 
         y_initial = [
             -0.0749228904740065, 0.0936532528714175, 3.79675694306440e-05, 0,
@@ -120,22 +131,41 @@ class PaciModel(CellModel):
             0.0995891726023512, 0.0249102482276486, 0.841714924246004,
             0.00558005376429710, 8.64821066193476, 0.00225383437957339,
             0.0811507312565017, 0.0387066722172937, 0.0260449185736275,
-            0.0785849084330126
+            0.0785849084330126, 0.000000000000000000e+00
         ]
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
                          updated_parameters,
-                         no_ion_selective_dict)
+                         no_ion_selective_dict,
+                         default_time_unit,
+                         default_voltage_unit,
+                         is_exp_artefact=is_exp_artefact)
 
     def action_potential_diff_eq(self, t, y):
-        d_y = np.empty(23)
+        if self.is_exp_artefact:
+            d_y = np.zeros(27)
+        else:
+            d_y = np.zeros(24)
+
 
         # Nernst potential
-        e_na = self.r_joule_per_mole_kelvin *  self.t_kelvin / self.f_coulomb_per_mole * log( self.nao_millimolar / y[17])
+        try:
+            e_na = self.r_joule_per_mole_kelvin *  self.t_kelvin / self.f_coulomb_per_mole * log( self.nao_millimolar / y[17])
+        except ValueError:
+            print(f'Intracellular Sodium negative at time {t}')
 
-        e_ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mole * log(
-            self.cao_millimolar / y[2])
+            y[17] = 8.6
+            e_na = self.r_joule_per_mole_kelvin *  self.t_kelvin / self.f_coulomb_per_mole * log( self.nao_millimolar / y[17])
+
+        try:
+            e_ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mole * log(
+                self.cao_millimolar / y[2])
+        except:
+            print(f'Intracellular Calcium negative at time {t}')
+            y[2] = 1.3E-4
+            e_ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mole * log(
+                self.cao_millimolar / y[2])
 
         e_k = self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mole * log(
             self.ko_millimolar / self.ki_millimolar)
@@ -279,7 +309,7 @@ class PaciModel(CellModel):
 
         # i to
         g_to_s_per_f = 29.9038
-        i_to = g_to_s_per_f * (y[0] - e_k) * y[15] * y[16]
+        i_to = self.default_parameters['G_To'] * g_to_s_per_f * (y[0] - e_k) * y[15] * y[16]
 
         q_inf = 1.0 / (1.0 + np.exp((y[0] * 1000.0 + 53.0) / 13.0))
         tau_q = (6.06 + 39.102 /
@@ -456,6 +486,11 @@ class PaciModel(CellModel):
         d_y[1] = ca_sr_buf_sr * self.vc_micrometer_cube / self.v_sr_micrometer_cube * (
             i_up - (i_rel + i_leak))
 
+
+        i_K1_ishi, d_y[23] = Ishi.I_K1(y[0], e_k, y[23], self.ko_millimolar, 
+                0)
+
+
         # No Ion Selective
         i_no_ion = 0
         if self.is_no_ion_selective:
@@ -475,31 +510,88 @@ class PaciModel(CellModel):
                 'I_bCa': i_b_ca
             }
             for curr_name, scale in self.no_ion_selective.items():
-                i_no_ion += scale * current_dictionary[curr_name]
+                if curr_name == 'I_K1_Ishi':
+                    i_no_ion += scale * Ishi.I_K1(y[0] * 1000, e_k * 1000, y[23],
+                                                      self.ko_millimolar, 1)[0]
+                else:
+                    i_no_ion += scale * current_dictionary[curr_name]
 
-        # Membrane potential
-        d_y[0] = -(i_k1 + i_to + i_kr + i_ks + i_ca_l + i_na_k + i_na + i_na_l
-                   + i_na_ca + i_p_ca + i_f + i_b_na + i_b_ca + i_no_ion) + self.i_stimulation
+        if self.is_exp_artefact:
 
+                        ### Simple
+            i_ion = self.exp_artefacts.c_m_star*((i_k1 + i_to + i_kr + i_ks +
+                i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
+                i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
+
+            i_seal_leak = self.exp_artefacts.get_i_leak(
+                    self.artefact_parameters['g_leak'],
+                    self.artefact_parameters['e_leak'], y[0] * 1000)
+
+            i_out = i_ion + i_seal_leak
+
+            #y[23] is v_cmd
+            v_p = y[26] * 1000 + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out * self.default_parameters['pipette_scale']
+
+            dvm_dt = self.exp_artefacts.get_dvm_dt(
+                    self.artefact_parameters['c_m'],
+                    self.artefact_parameters['v_off'],
+                    self.artefact_parameters['r_pipette'] *
+                        self.default_parameters['pipette_scale'],
+                    v_p, y[0] * 1000, i_ion, i_seal_leak)
+
+            i_ion = i_ion / self.exp_artefacts.c_m_star
+            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
+            i_out = i_out / self.exp_artefacts.c_m_star
+
+            d_y[0] = dvm_dt
+
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_k1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_kr),
+                    trace.Current(name='I_Ks', value=i_ks),
+                    trace.Current(name='I_CaL', value=i_ca_l),
+                    trace.Current(name='I_NaK', value=i_na_k),
+                    trace.Current(name='I_Na', value=i_na),
+                    trace.Current(name='I_NaL', value=i_na_l),
+                    trace.Current(name='I_NaCa', value=i_na_ca),
+                    trace.Current(name='I_pCa', value=i_p_ca),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_na),
+                    trace.Current(name='I_bCa', value=i_b_ca),
+                    trace.Current(name='I_ion', value=i_ion),
+                    trace.Current(name='I_seal_leak', value=i_seal_leak),
+                    trace.Current(name='I_out', value=i_out),
+                    trace.Current(name='I_no_ion', value=i_no_ion),
+                ]
+
+
+        else:
+            d_y[0] = -(i_k1 + i_to + i_kr + i_ks + i_ca_l + i_na_k + i_na + i_na_l
+                       + i_na_ca + i_p_ca + i_f + i_b_na + i_b_ca + i_no_ion) + self.i_stimulation
+
+            if self.current_response_info:
+                current_timestep = [
+                    trace.Current(name='I_K1', value=i_k1),
+                    trace.Current(name='I_To', value=i_to),
+                    trace.Current(name='I_Kr', value=i_kr),
+                    trace.Current(name='I_Ks', value=i_ks),
+                    trace.Current(name='I_CaL', value=i_ca_l),
+                    trace.Current(name='I_NaK', value=i_na_k),
+                    trace.Current(name='I_Na', value=i_na),
+                    trace.Current(name='I_NaL', value=i_na_l),
+                    trace.Current(name='I_NaCa', value=i_na_ca),
+                    trace.Current(name='I_pCa', value=i_p_ca),
+                    trace.Current(name='I_F', value=i_f),
+                    trace.Current(name='I_bNa', value=i_b_na),
+                    trace.Current(name='I_bCa', value=i_b_ca),
+                    trace.Current(name='I_no_ion', value=i_no_ion)
+                ]
+        
         if self.current_response_info:
-            current_timestep = [
-                trace.Current(name='I_K1', value=i_k1),
-                trace.Current(name='I_To', value=i_to),
-                trace.Current(name='I_Kr', value=i_kr),
-                trace.Current(name='I_Ks', value=i_ks),
-                trace.Current(name='I_CaL', value=i_ca_l),
-                trace.Current(name='I_NaK', value=i_na_k),
-                trace.Current(name='I_Na', value=i_na),
-                trace.Current(name='I_NaL', value=i_na_l),
-                trace.Current(name='I_NaCa', value=i_na_ca),
-                trace.Current(name='I_pCa', value=i_p_ca),
-                trace.Current(name='I_F', value=i_f),
-                trace.Current(name='I_bNa', value=i_b_na),
-                trace.Current(name='I_bCa', value=i_b_ca),
-            ]
             self.current_response_info.currents.append(current_timestep)
 
-        self.d_y_voltage.append(d_y[0])
         return d_y
 
 def generate_trace(protocol, tunable_parameters=None, params=None):
@@ -522,4 +614,4 @@ def generate_trace(protocol, tunable_parameters=None, params=None):
         for i in range(len(params)):
             new_params[tunable_parameters[i].name] = params[i]
 
-    return PaciModel(updated_parameters=new_params).generate_response(protocol)
+    return PaciModel(updated_parameters=new_params).generate_response(protocol, is_no_ion_selective=False)

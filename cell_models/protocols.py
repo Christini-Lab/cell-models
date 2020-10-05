@@ -13,11 +13,14 @@ class SpontaneousProtocol:
         self.duration = duration
 
 class PacedProtocol:
-    """Encapsulates state and behavior of a paced protocol"""
+    """
+    Encapsulates state and behavior of a paced protocol
+    
+    model_name: "Paci", "Kernik", "OR"
+    """
     def __init__(self, model_name, stim_end=6000,
                  stim_start=10, pace=1):
         """
-        model_name: "Paci", "Kernik", "OR"
 
         """
         if (model_name == "Kernik"):
@@ -106,6 +109,27 @@ class VoltageClampStep:
         self.voltage = mutate(v_bounds, self.voltage)
         self.duration = mutate(d_bounds, self.duration)
 
+class AperiodicPacingProtocol():
+    """
+    Encapsulates state and behavior of a paced protocol
+    
+    model_name: "Paci", "Kernik", "OR"
+    """
+    def __init__(self, model_name, duration=10000,
+                 stim_starts=[442.80, 942.80, 2942.8,
+                              4142.8, 4742.8, 5142.8,
+                              6142.8, 6442.8, 7142.8,
+                              8642.8, 9442.8]):
+
+        if (model_name == "Kernik") or (model_name == "Paci"):
+            self.stim_amplitude = 30
+            self.stim_duration = 2
+        elif model_name == "OR":
+            self.stim_amplitude = 80
+            self.stim_duration = 1
+
+        self.duration = duration
+        self.stim_starts = stim_starts
 
 
 class VoltageClampRamp:

@@ -99,7 +99,9 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
     VC_MAX_ERROR = 130
 
     def __init__(self,
-                 targets,
+                 targets: dict,
+                 model_name: str,
+                 cell_model,
                  params_lower_bound: float,
                  params_upper_bound: float,
                  tunable_parameters: List[Parameter],
@@ -113,7 +115,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
                  secondary_protocol: protocols.PROTOCOL_TYPE=None,
                  target_params=None,
                  with_exp_artefact=False,
-                 model_name=None) -> None:
+                 ) -> None:
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -130,6 +132,7 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
         self.target_params = target_params
         self.with_exp_artefact = with_exp_artefact
         self.model_name = model_name
+        self.cell_model = cell_model
 
     def has_equal_hyperparameters(self, other: 'ParameterTuningConfig') -> bool:
         return (super().has_equal_hyperparameters(other=other) and
@@ -177,7 +180,8 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
                  tournament_size: int,
                  target_current: str = None,
                  step_types = ["step", "ramp", "sinusoid"],
-                 with_artefact=False):
+                 with_artefact=False,
+                 model_name='Kernik'):
         super().__init__(
             population_size=population_size,
             max_generations=max_generations,
@@ -194,6 +198,7 @@ class VoltageOptimizationConfig(GeneticAlgorithmConfig):
         self.target_current = target_current
         self.step_types = step_types
         self.with_artefact = with_artefact
+        self.model_name = model_name
 
 
 class CombinedVCConfig:

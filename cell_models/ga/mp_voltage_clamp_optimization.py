@@ -10,12 +10,11 @@ from multiprocessing import Pool
 import pickle
 
 from cell_models.ga import ga_configs, genetic_algorithm_results
-from cell_models import protocols
+from cell_models import protocols, paci_2018
 from cell_models.kernik import KernikModel
 
 
 def run_ga(ga_params, toolbox):
-
     current_results = []
     current = ga_params.config.ga_config.target_current
 
@@ -39,7 +38,7 @@ def run_ga(ga_params, toolbox):
                 fitness=population[i].fitness.values[0]))
 
     final_population = [initial_population]
-    
+
     for generation in range(1, ga_params.config.ga_config.max_generations):
         print(f'\tGeneration {generation} for {current}')
 
@@ -93,10 +92,9 @@ def _evaluate(eval_input):
     """
     individual, current = eval_input
 
-    max_contributions = individual[0].evaluate(
-            config=VCGA_PARAMS.config.ga_config, prestep=5000)
-
     try:
+        max_contributions = individual[0].evaluate(
+                config=VCGA_PARAMS.config.ga_config, prestep=5000)
         fitness = max_contributions.loc[max_contributions['Current'] == current][
                 'Contribution'].values[0]
     except:
@@ -178,6 +176,8 @@ class VCGAParams():
         """
         if model_name == "Kernik":
             self.cell_model = KernikModel
+        else:
+            self.cell_model = paci_2018.PaciModel
 
         self.config = vco_config
         self.previous_population = None
@@ -189,7 +189,7 @@ creator.create('Individual', list, fitness=creator.FitnessMax)
 def start_ga(vco_config):
     global VCGA_PARAMS
 
-    VCGA_PARAMS = VCGAParams('Kernik', vco_config)
+    VCGA_PARAMS = VCGAParams(vco_config.ga_config.model_name, vco_config)
 
     toolbox = base.Toolbox()
     toolbox.register('init_param', _init_individual)

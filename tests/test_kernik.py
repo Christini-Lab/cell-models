@@ -1,51 +1,89 @@
 import context
 
 from cell_models import protocols
-from cell_models import kernik
+from cell_models import kernik, paci_2018
 
 import unittest
 import matplotlib.pyplot as plt
+from computational_methods.plot_figures import plt_mult_frame
 
 
 class TestKernik(unittest.TestCase):
     """Basic test cases."""
 
-    def test_baseline_artefact(self):
+    def test_baseline_vs_avg(self):
         """
         Test if the baseline model generates a valid response
         """
         model_baseline = kernik.KernikModel()
-        model_baseline_artefact = kernik.KernikModel(
-            updated_parameters={"I_Na": 2},
-            is_exp_artefact=True)
-        model_new_leak = kernik.KernikModel(
-            updated_parameters={"I_Na": 2, "G_seal_leak": 6},
-            is_exp_artefact=True)
-        model_new_v_off = kernik.KernikModel(
-            updated_parameters={"I_Na": 2, "V_off": 3},
-            is_exp_artefact=True)
+        model_average = kernik.KernikModel(model_kinetics_type='Average', model_conductances_type='Average')
 
+        spontaneous_protocol = protocols.SpontaneousProtocol(1000)
 
-        spontaneous_protocol = protocols.SpontaneousProtocol(1500)
+        tr_baseline = model_baseline.generate_response(spontaneous_protocol, is_no_ion_selective=False)
+        tr_average = model_average.generate_response(spontaneous_protocol,
+                is_no_ion_selective=False)
 
-        simple_protocol = protocols.VoltageClampProtocol([
-            protocols.VoltageClampStep(voltage=-80, duration=1000),
-            protocols.VoltageClampStep(voltage=1, duration=1000)])
-
-        tr_baseline = model_baseline.generate_response(spontaneous_protocol)
-        tr_base = model_baseline_artefact.generate_response(simple_protocol)
-        tr_leak = model_new_leak.generate_response(simple_protocol)
-        tr_v_off = model_new_v_off.generate_response(simple_protocol)
-
-        for tr in [tr_base, tr_leak, tr_v_off]:
+        for tr in [tr_baseline, tr_average]:
             plt.plot(tr.t, tr.y)
 
         plt.show()
 
-        plt.plot(tr_base.t, tr_base.current_response_info.get_current_summed())
-        plt.plot(tr_leak.t, tr_leak.current_response_info.get_current_summed())
-        plt.plot(tr_v_off.t, tr_v_off.current_response_info.get_current_summed())
+    def test_baseline_vs_avg_vc(self):
+        """
+        Test if the baseline model generates a valid response
+        """
+        simple_protocol = protocols.VoltageClampProtocol([
+            protocols.VoltageClampStep(voltage=-80, duration=5000),
+            protocols.VoltageClampStep(voltage=40, duration=8000),
+            protocols.VoltageClampStep(voltage=-80, duration=4000),
+            protocols.VoltageClampStep(voltage=100, duration=8000)
+            ])
 
+        model_baseline = kernik.KernikModel()
+        model_average = kernik.KernikModel(model_kinetics_type='Average', model_conductances_type='Average')
+
+        print(model_baseline.conductances)
+        print(model_average.conductances)
+
+        tr_baseline = model_baseline.generate_response(simple_protocol, is_no_ion_selective=False)
+        tr_average = model_average.generate_response(simple_protocol,
+                is_no_ion_selective=False)
+
+        fig, axs = plt.subplots(2, 1, sharex=True)
+        labels = ['Baseline', 'Average']
+        for i, tr in enumerate([tr_baseline, tr_average]):
+            axs[0].plot(tr.t, tr.y)
+            axs[1].plot(tr.t, tr.current_response_info.get_current_summed(), label=labels[i])
+            
+        plt.legend()
+        plt.show()
+
+    def test_baseline_vs_rand(self):
+        rand = kernik.KernikModel(model_kinetics_type='Random',
+                model_conductances_type='Random',
+                is_exp_artefact=True)
+        baseline = kernik.KernikModel(is_exp_artefact=True)
+
+        proto = protocols.VoltageClampProtocol([
+            protocols.VoltageClampStep(voltage=-80, duration=5000),
+            protocols.VoltageClampStep(voltage=40, duration=8000),
+            protocols.VoltageClampStep(voltage=-80, duration=4000),
+            protocols.VoltageClampStep(voltage=100, duration=8000)
+            ])
+
+        tr_baseline = baseline.generate_response(proto, is_no_ion_selective=False)
+        tr_rand = rand.generate_response(proto, is_no_ion_selective=False)
+
+        fig, axs = plt.subplots(2, 1, sharex=True)
+        labels = ['Baseline', 'Random']
+
+        for i, tr in enumerate([tr_baseline, tr_rand]):
+            axs[0].plot(tr.t, tr.y)
+            axs[1].plot(tr.t, tr.current_response_info.get_current_summed(),
+                    label=labels[i])
+
+        plt.legend()
         plt.show()
 
 

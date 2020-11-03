@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from math import floor, log, ceil
 from scipy.interpolate import interp1d
 
-from cell_models import protocols, kernik, paci_2018
+from cell_models import protocols, kernik, paci_2018, trace
 from cell_models.rtxi.rtxi_data_exploration import get_exp_as_df
 from computational_methods.process_cell_data import get_single_ap
 from h5py import File
@@ -13,8 +13,8 @@ from h5py import File
 
 class TargetObjective():
     def __init__(self, time, voltage, current, capacitance,
-                 protocol_type, target_meta, max_current_ranges=None,
-                 g_ishi=None):
+                 protocol_type, model_name, target_protocol=None, target_meta=None,
+                 times_to_compare=None, g_ishi=None):
         """
         Parameters
         ----------
@@ -23,22 +23,52 @@ class TargetObjective():
             current – current in A/F
             capacitance – cell capacitance in pF
             protocol_type – String describing the protocol type
+            target_protocol – Protocol object if the TargetObjective is
+                not experimental. Otherwise None
+            is_exp – One of the following strings:
+                'Experimental'
+                'Kernik'
+                'Paci'
             target_meta – metadata object with information about where
                 the data came from
             freq – sampling frequency in 1/ms
         """
+        #cell-specific stuff
         self.time = time
         self.voltage = voltage
         self.current = current
         self.cm = capacitance
+
+        #protocol-specific
         self.protocol_type = protocol_type
+        self.target_protocol = target_protocol
+        self.model_name = model_name 
+
+        #target-specific
         self.target_meta = target_meta
-        self.max_current_ranges = max_current_ranges
+        self.times_to_compare = times_to_compare
         self.g_ishi = g_ishi
 
-        self.freq = 1/(self.time[1] - self.time[0])
+        if ((self.target_protocol is None) or
+                isinstance(self.target_protocol, TargetObjective)):
+            self.freq = 1/(self.time[1] - self.time[0])
+        else:
+            self.freq = 10#samples/ms
+            self.interp_t_v_c()
+            
+    def interp_t_v_c(self):
+        max_sim_time = self.time[-1]
+        t_interp = np.linspace(0, max_sim_time, max_sim_time * self.freq)
 
-        #self.filter_signal()
+        f_curr = interp1d(self.time, self.current)
+        f_voltage = interp1d(self.time, self.voltage)
+
+        curr_interp = f_curr(t_interp)
+        voltage_interp = f_voltage(t_interp)
+
+        self.time = t_interp
+        self.voltage = voltage_interp
+        self.current = curr_interp
 
     def plot_data(self, title, saved_to=None):
         fig, axes = plt.subplots(2, 1, figsize=(10,8), sharex=True)
@@ -89,7 +119,36 @@ class TargetObjective():
                                     'I': np.array(new_currents)*1E12/self.cm,
                                     'V': new_voltages})
 
-    def compare_individual(self, individual_tr):
+    def compare_individual(self, individual_model, prestep=5000, return_all_errors=False):
+        prestep_proto = protocols.VoltageClampProtocol([protocols.VoltageClampStep(voltage=-80, duration=prestep)])
+
+        individual_model.generate_response(prestep_proto, is_no_ion_selective=False)
+        individual_model.y_ss = individual_model.y[:, -1]
+
+        #Cases:
+            #1 is to see if the target is a simulation. If not, pass in
+                #entire target
+            #2 is to see if there is a no_ion_selective dictionary. If yes,
+                #pass in self.target_protocol with no_ion_selective to False
+            #3 if there is a no_ino_selective dictionary and your target is
+                #a VoltageClampProtocol, then set is_no_ionselective to False
+            #4 set is_no_ion_selective to True if you have the dict and the
+                #protocol is not VC
+
+        if self.target_protocol is not None:
+            if individual_model.no_ion_selective is None:
+                individual_tr = individual_model.generate_response(
+                        self.target_protocol, is_no_ion_selective=False)
+            elif isinstance(self.target_protocol, protocols.VoltageClampProtocol):
+                individual_tr = individual_model.generate_response(
+                        self.target_protocol, is_no_ion_selective=False)
+            else:
+                individual_tr = individual_model.generate_response(
+                        self.target_protocol, is_no_ion_selective=True)
+        else:
+            individual_tr = individual_model.generate_response(
+                    self, is_no_ion_selective=False)
+            
         if individual_tr.default_unit == 'standard':
             scale = 1000
         elif individual_tr.default_unit == 'milli':
@@ -100,7 +159,6 @@ class TargetObjective():
         ind_current = individual_tr.current_response_info.get_current_summed()
 
         if self.protocol_type == 'Voltage Clamp':
-            error = 0
             max_simulated_t = ind_time.max()
             max_exp_index = int(round(self.freq * max_simulated_t)) - 1
 
@@ -109,19 +167,14 @@ class TargetObjective():
 
             ind_interp_current = f(t_interp)
 
-            try:
-                if self.max_current_ranges is not None:
-                    error = self._calc_errors_in_ranges(ind_interp_current,
-                            self.current[0:max_exp_index])
-
-                else:
-                    error = sum(abs(ind_interp_current - self.current[0:max_exp_index]))
-            except:
+            if self.times_to_compare is not None:
+                error = self.calc_errors_in_ranges(ind_interp_current,
+                        self.current[0:max_exp_index],
+                        return_all_errors=return_all_errors)
+            else:
                 error = sum(abs(ind_interp_current - self.current[0:max_exp_index]))
 
         elif self.protocol_type == 'Dynamic Clamp':
-            error = 0
-
             max_simulated_t = ind_time.max()
 
             max_exp_index = int(round(self.freq * max_simulated_t)) - 1
@@ -132,11 +185,14 @@ class TargetObjective():
             ind_interp_voltage = f(t_interp)
 
             error = sum(abs(ind_interp_voltage - self.voltage[0:max_exp_index]))
+        else:
+            raise('I have only implemented comparisons for VC and dynamic clamp data')
 
         return error
 
-    def _calc_errors_in_ranges(self, ind_current, target_current):
-        target_ranges = self.max_current_ranges
+    def calc_errors_in_ranges(self, ind_current, target_current,
+            return_all_errors=False):
+        target_ranges = self.times_to_compare
 
         errors = []
 
@@ -151,7 +207,10 @@ class TargetObjective():
 
             errors.append(normed_error)
 
-        return errors
+        if return_all_errors:
+            return errors
+        else:
+            return sum(errors)
 
 
     def get_index_at_tame(self, t):
@@ -172,11 +231,13 @@ class TargetObjective():
 
         return self.current[current_index]
 
+
 class PacedTarget(TargetObjective):
     def __init__(self, time, voltage, current, capacitance,
                  protocol_type, target_meta):
         super().__init__(time, voltage, current, capacitance, 
                 protocol_type, target_meta)
+
 
 def create_target_objective(target_meta):
     """
@@ -236,10 +297,11 @@ def create_target_objective(target_meta):
                              target_meta.mem_capacitance,
                              target_meta.protocol_type,
                              target_meta,
-                             max_current_ranges=max_current_ranges,
+                             times_to_compare=max_current_ranges,
                              g_ishi=max_ishi)
 
     return target
+
 
 def remove_capacitive_current(time, voltage, current):
     freq = round(1 / (time[1] - time[0]))
@@ -267,3 +329,42 @@ def remove_capacitive_current(time, voltage, current):
             current[index] = current_start + slope * (time[index] - time_start)
 
     return current
+
+
+def create_target_from_protocol(cell_model, protocol,
+        times_to_compare=None, g_ishi=None):
+    """
+    This will create a target object from a cell model and protocol
+    """
+
+    is_no_ion_selective = False
+    if isinstance(protocol, protocols.AperiodicPacingProtocol):
+        proto_type = "Dynamic Clamp"
+        is_no_ion_selective = True
+    elif isinstance(protocol, protocols.SpontaneousProtocol):
+        proto_type = "Spontaneous"
+    elif isinstance(protocol, protocols.VoltageClampProtocol):
+        proto_type = "Voltage Clamp"
+
+    tr = cell_model.generate_response(protocol, is_no_ion_selective=is_no_ion_selective)
+    
+    if isinstance(cell_model, paci_2018.PaciModel):
+        model_name = 'Paci'
+        scale = 1000
+    elif isinstance(cell_model, kernik.KernikModel):
+        model_name = 'Kernik'
+        scale = 1
+    else:
+        print('Model does not exist')
+        import pdb
+        pdb.set_trace()
+
+    return TargetObjective(tr.t * scale,
+                           tr.y * scale,
+                           tr.current_response_info.get_current_summed(),
+                           cell_model.cm_farad,
+                           protocol_type=proto_type,
+                           model_name=model_name,
+                           target_protocol=protocol,
+                           target_meta=None,
+                           times_to_compare=times_to_compare)

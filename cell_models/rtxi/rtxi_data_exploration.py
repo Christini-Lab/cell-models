@@ -19,7 +19,9 @@ def extract_channel_data(data_h5, trial_number):
     return data
 
 
-def plot_V_and_I(data, t_range, title):
+def plot_V_and_I(data, t_range, title, col=None):
+    if col is None:
+        col = 'b'
     if t_range is not None:
         idx_start = (data['Time (s)']-t_range[0]).abs().idxmin()
         idx_end = (data['Time (s)']-t_range[1]).abs().idxmin()
@@ -36,8 +38,14 @@ def plot_V_and_I(data, t_range, title):
 
     axes[1].set_ylabel('Current (pA/pF)', fontsize=20)
     axes[1].set_xlabel('Time (s)', fontsize=20)
-    axes[1].plot(data['Time (s)'], data['Current'])
+    axes[1].plot(data['Time (s)'], data['Current'], col)
     axes[1].tick_params(labelsize=14)
+
+    axes[0].spines['top'].set_visible(False)
+    axes[0].spines['right'].set_visible(False)
+    axes[1].spines['top'].set_visible(False)
+    axes[1].spines['right'].set_visible(False)
+
     #axes[1].set_ylim([-.5, .5])
     plt.show()
 
@@ -96,6 +104,12 @@ def get_current_and_voltage(f, trial):
             if 'Pace' in k:
                 if p[1] != 0:
                     is_current_clamp = True
+    
+    is_voltage_max_in_range = (voltage.max() > .085) and (voltage.max() < .11)
+    is_voltage_min_in_range = (voltage.min() > -.21) and (voltage.min() < -.19)
+
+    if is_voltage_max_in_range  and is_voltage_min_in_range:
+        is_current_clamp = False
 
     if is_current_clamp:
         current = -current
@@ -119,10 +133,10 @@ def get_exp_as_df(data_h5, trial_number, cm):
     return d_as_frame
 
 
-def plot_recorded_data(recorded_data, trial_number, does_plot=False, t_range=None, title=None):
+def plot_recorded_data(recorded_data, trial_number, does_plot=False, t_range=None, title=None, col=None):
 
     if does_plot:
-        plot_V_and_I(recorded_data, t_range, title=title)
+        plot_V_and_I(recorded_data, t_range, title=title, col=col)
 
     return recorded_data
 
@@ -169,6 +183,7 @@ def get_tags(f, trial_number):
 
     return tags
 
+
 def print_parameters(f, trial_number):
     parameters = {}
 
@@ -206,9 +221,7 @@ def print_parameters(f, trial_number):
             print(f'\t\t{change}')
 
 
-
-
-def explore_data(file_path):
+def explore_data(file_path, col=None):
     f = h5py.File(file_path, 'r')
     does_plot = True
 
@@ -241,5 +254,5 @@ def explore_data(file_path):
 
         recorded_data = get_exp_as_df(f, trial, cm)
         
-        plot_recorded_data(recorded_data, trial, does_plot, title=f'Trial {trial}')
+        plot_recorded_data(recorded_data, trial, does_plot, title=f'Trial {trial}', col=col)
 

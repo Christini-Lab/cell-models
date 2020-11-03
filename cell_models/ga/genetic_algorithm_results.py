@@ -9,9 +9,11 @@ import enum
 import math
 import random
 from typing import Dict, List, Union
+from os import listdir, mkdir
 
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+import matplotlib.lines as mlines
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -58,13 +60,42 @@ class GeneticAlgorithmResult(ABC):
             generation=generation,
             index=random.randint(0, len(self.generations[generation]) - 1))
 
-    def get_high_fitness_individual(self, generation):
+    def get_high_fitness_individual(self, generation=None):
         """Given a generation, returns the individual with the least error."""
-        return self._get_individual_at_extreme(generation, ExtremeType.HIGH)
+        ind_gen = 0
+        if generation is None:
+            for gen_num, gen in enumerate(self.all_individuals):
+                if gen_num == 0:
+                    best_ind = self._get_individual_at_extreme(gen_num,
+                            ExtremeType.HIGH)
+                else:
+                    temp_best = self._get_individual_at_extreme(gen_num,
+                            ExtremeType.HIGH)
+                    if temp_best.fitness > best_ind.fitness:
+                        best_ind = temp_best
+                        ind_gen = gen_num
+            print(f'Individual is from generation {gen_num}')
+            return best_ind
+        else:
+            return self._get_individual_at_extreme(generation, ExtremeType.HIGH)
 
-    def get_low_fitness_individual(self, generation):
+    def get_low_fitness_individual(self, generation=None):
         """Given a generation, returns the individual with the most error."""
-        return self._get_individual_at_extreme(generation, ExtremeType.LOW)
+        if generation is None:
+            for gen_num, gen in enumerate(self.all_individuals):
+                if gen_num == 0:
+                    best_ind = self._get_individual_at_extreme(gen_num,
+                            ExtremeType.LOW)
+                else:
+                    temp_best = self._get_individual_at_extreme(gen_num,
+                            ExtremeType.LOW)
+                    if temp_best.fitness < best_ind.fitness:
+                        best_ind = temp_best
+                        ind_gen = gen_num
+            print(f'Individual is from generation {gen_num}')
+            return best_ind
+        else:
+            return self._get_individual_at_extreme(generation, ExtremeType.LOW)
 
     def _get_individual_at_extreme(self,
                                    generation: int,
@@ -92,8 +123,6 @@ class GeneticAlgorithmResult(ABC):
         data = np.array(data)
 
         # Display log error in colorbar.
-        import pdb
-        pdb.set_trace()
         tick_range = range(
             math.floor(math.log10(data.min().min())),
             1 + math.ceil(math.log10(data.max().max())))
@@ -145,9 +174,9 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         baseline_trace: The baseline trace of the genetic algorithm run.
     """
 
-    def __init__(self, model, target, target_params, all_individuals,
+    def __init__(self, model, target, all_individuals,
                  config: ga_configs.ParameterTuningConfig,
-                 time_conversion=1) -> None:
+                 time_conversion=1, target_params=None) -> None:
         super().__init__(all_individuals)
         self.config = config
         self.model = model
@@ -155,6 +184,7 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
         self.target_params = target_params
         self.all_individuals = all_individuals
         self.time_conversion = time_conversion
+        self.target_params = target_params
 
     def get_parameter_scales(self, individual):
         parameter_scaling = []
@@ -204,7 +234,7 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
             parameter_vals = [np.log10(individual.parameters[k]) for k in
                               parameter_indices]
             y_max = np.log10(y_max)
-            y_min = np.log10(y_min)
+            y_min = np.log10(.1)
             baseline = 0
             y_label = 'Log10(Scaled Conductance)'
         else:
@@ -324,6 +354,68 @@ class GAResultParameterTuning(GeneticAlgorithmResult):
             loc='upper right',
             bbox_to_anchor=(1, 1.1))
         plt.savefig('figures/Parameter Tuning Figure/error_over_generation.svg')
+
+    def graph_params_by_generation(self, saved_to, is_top_ten=False,
+            target_params=None, is_log=True):
+
+        for gen_num, individuals in enumerate(self.all_individuals):
+            fig, ax = plt.subplots(figsize=(10, 8))
+
+            if is_top_ten:
+                individuals.sort(key=lambda x: x.fitness)
+                individuals = individuals[0:10]
+
+            for ind in individuals:
+                self.graph_individual_param_set(ind, fig=fig, ax=ax, is_log=is_log)
+
+            tunable_params = [par.name for par in self.config.tunable_parameters]
+
+            if target_params is not None:
+                target_names = [v for v in target_params.keys() if v in
+                        tunable_params]
+                target_values = [target_params[name] for name in target_names]
+                if is_log:
+                    target_values = np.log10(target_values)
+                ax.scatter(target_names, target_values, c='#2419ff', s=90,
+                        marker="D", label='Target Parameters')
+                ax.tick_params(labelsize=14)
+
+            if is_log:
+                lower_bound = -1
+                upper_bound = 1
+            else:
+                lower_bound = 0
+                upper_bound = self.config.params_upper_bound + 1
+
+            plt.ylim(lower_bound, upper_bound)
+            plt.title(f'Generation {gen_num}', fontsize=28)
+
+            handles, labels = ax.get_legend_handles_labels()
+            red_dot = mlines.Line2D([], [], color='red', marker='.',
+                    linestyle='None', markersize=10,
+                    label='Individual Parameter Below Baseline')
+            green_dot = mlines.Line2D([], [], color='green', marker='.',
+                    linestyle='None', markersize=10,
+                    label='Individual Parameter Above Baseline')
+
+            plt.legend(handles=(handles+[red_dot, green_dot]))
+
+            if is_top_ten:
+                saved_to_folder = f'{saved_to}/frames_top_ten'
+                if 'frames_top_ten' not in listdir(saved_to):
+                    mkdir(saved_to_folder)
+                plt.savefig( 
+                    f'{saved_to_folder}/frame_{gen_num}.png')
+            else:
+                saved_to_folder = f'{saved_to}/frames'
+                if 'frames' not in listdir(saved_to):
+                    mkdir(saved_to_folder)
+                plt.savefig( 
+                    f'{saved_to_folder}/frame_{gen_num}.png')
+
+            plt.close(fig)
+
+
 
 
 class GAResultVoltageClampOptimization(GeneticAlgorithmResult):
@@ -593,12 +685,24 @@ class VCOptimizationIndividual(Individual):
     def __lt__(self, other):
         return self.fitness < other.fitness
 
-    def evaluate(self, config: ga_configs.VoltageOptimizationConfig, 
+    def evaluate(self, config: ga_configs.VoltageOptimizationConfig,
             prestep=5000) -> int:
         """Evaluates the fitness of the individual."""
-        i_trace = get_model_response(
-                kernik.KernikModel(is_exp_artefact=config.with_artefact), self.protocol, prestep=prestep)
+        try:
+            if config.model_name == 'Paci':
+                i_trace = get_model_response(
+                        paci_2018.PaciModel(is_exp_artefact=config.with_artefact), self.protocol, prestep=prestep)
+                scale = 1000
+            else:
+                i_trace = get_model_response(
+                        kernik.KernikModel(is_exp_artefact=config.with_artefact), self.protocol, prestep=prestep)
+                scale = 1
+
+        except:
+            print('failed')
+            return 0
         #i_trace = kernik.KernikModel().generate_response(protocol=self.protocol)
+
 
         if not i_trace:
             return 0
@@ -606,8 +710,8 @@ class VCOptimizationIndividual(Individual):
         max_contributions = i_trace.current_response_info.\
             get_max_current_contributions(
                 time=i_trace.t,
-                window=config.window,
-                step_size=config.step_size)
+                window=config.window/scale,
+                step_size=config.step_size/scale)
 
         return max_contributions
 
@@ -629,28 +733,41 @@ def get_model_response(model, protocol, prestep):
     applies the protocol. The function returns a trace object with the 
     recording during the input protocol.
     """
-    if prestep == 5000:
-        model.y_ss = [-8.00000000e+01,  3.21216155e-01,  4.91020485e-05,  
-                      7.17831342e+00, 1.04739792e+02,  0.00000000e+00,  
-                      2.08676499e-04,  9.98304915e-01, 1.00650102e+00,  
-                      2.54947318e-04,  5.00272640e-01,  4.88514544e-02, 
-                      8.37710905e-01,  8.37682940e-01,  1.72812888e-02,  
-                      1.12139759e-01, 9.89533019e-01,  1.79477762e-04,  
-                      1.29720330e-04,  9.63309509e-01, 5.37483590e-02,  
-                      3.60848821e-05,  6.34831828e-04]
-        if model.is_exp_artefact:
-            y_ss = model.y_ss
-            model.y_ss = model.y_initial
-            model.y_ss[0:23] = y_ss
+    if isinstance(model, kernik.KernikModel):
+        if prestep == 5000:
+            model.y_ss = [-8.00000000e+01,  3.21216155e-01,  4.91020485e-05,  
+                          7.17831342e+00, 1.04739792e+02,  0.00000000e+00,  
+                          2.08676499e-04,  9.98304915e-01, 1.00650102e+00,  
+                          2.54947318e-04,  5.00272640e-01,  4.88514544e-02, 
+                          8.37710905e-01,  8.37682940e-01,  1.72812888e-02,  
+                          1.12139759e-01, 9.89533019e-01,  1.79477762e-04,  
+                          1.29720330e-04,  9.63309509e-01, 5.37483590e-02,  
+                          3.60848821e-05,  6.34831828e-04]
+            if model.is_exp_artefact:
+                y_ss = model.y_ss
+                model.y_ss = model.y_initial
+                model.y_ss[0:23] = y_ss
+        else:
+            prestep_protocol = protocols.VoltageClampProtocol(
+                [protocols.VoltageClampStep(voltage=-80.0,
+                                            duration=prestep)])
+            model.generate_response(prestep_protocol, is_no_ion_selective=False)
+            model.y_ss = model.y[:, -1]
     else:
-        prestep_protocol = protocols.VoltageClampProtocol(
-            [protocols.VoltageClampStep(voltage=-80.0,
-                                        duration=prestep)])
+        if prestep == 5000:
+            model.y_ss = [-8.25343151e-02,  8.11127086e-02,  1.62883570e-05, 0.00000000e+00, 2.77952737e-05,  9.99999993e-01, 9.99997815e-01,  9.99029678e-01, 3.30417586e-06, 4.72698779e-01,  1.96776956e-02,  9.28349600e-01, 9.27816541e-01,  6.47972131e-02,  6.69227157e-01, 9.06520741e-01, 3.71681543e-03,  9.20330726e+00, 5.31745508e-04,  3.36764418e-01, 2.02812194e-02, 7.93275445e-03,  9.92246026e-01,  0.00000000e+00, 1.00000000e-01,  1.00000000e-01, -2.68570533e-02, -8.00000000e-02]
 
-        model.generate_response(prestep_protocol)
+            if not model.is_exp_artefact:
+                model.y_ss = model.y_ss[0:24]
 
-        model.y_ss = model.y[:, -1]
+        else:
+            prestep_protocol = protocols.VoltageClampProtocol( [protocols.VoltageClampStep(voltage=-80.0, duration=prestep)])
 
-    response_trace = model.generate_response(protocol)
+            model.generate_response(prestep_protocol, is_no_ion_selective=False)
+
+            model.y_ss = model.y[:, -1]
+
+    response_trace = model.generate_response(protocol, is_no_ion_selective=False)
+
 
     return response_trace

@@ -1,9 +1,6 @@
 import numpy as np
 from math import log, sqrt, exp
 
-from cell_models.model_initial import kernik_model_inputs
-
-
 class KernikCurrents():
     """An implementation of all Kernik currents by Kernik et al.
 
@@ -13,19 +10,6 @@ class KernikCurrents():
         updated_parameters: A dict containing all parameters that are being
             tuned.
     """
-
-    # Load model parameters
-    model_parameter_inputs = kernik_model_inputs()
-
-    # Current parameter values:
-    x_K1 = model_parameter_inputs[16:22]
-    x_KR = model_parameter_inputs[22:33]
-    x_IKS = model_parameter_inputs[33:39]
-    xTO = model_parameter_inputs[39:50]
-    x_cal = model_parameter_inputs[50:61]
-    x_cat = model_parameter_inputs[61]
-    x_NA = model_parameter_inputs[62:76]
-    x_F = model_parameter_inputs[76:82]
 
     Cm = 60
     V_tot = 3960
@@ -37,7 +21,9 @@ class KernikCurrents():
 
     def __init__(self, Ko, Cao, Nao, t_kelvin=310.0,
                  f_coulomb_per_mmole=96.4853415,
-                 r_joule_per_mole_kelvin=8.314472):
+                 r_joule_per_mole_kelvin=8.314472,
+                 model_kinetics=None,
+                 model_conductances=None):
         self.Ko = Ko # millimolar (in model_parameters)
         self.Cao = Cao  # millimolar (in model_parameters
         self.Nao = Nao  # millimolar (in model_parameters)
@@ -46,32 +32,48 @@ class KernikCurrents():
         self.r_joule_per_mole_kelvin = r_joule_per_mole_kelvin  
         self.f_coulomb_per_mmole = f_coulomb_per_mmole 
 
+        if model_kinetics is None:
+            model_parameters = KernikModelParameters()
+            model_kinetics = model_parameters.return_kinetics()
 
+        self.x_K1 = model_kinetics[0:5]
+        self.x_KR = model_kinetics[5:15]
+        self.x_IKS = model_kinetics[15:20]
+        self.xTO = model_kinetics[20:30]
+        self.x_cal = model_kinetics[30:40]
+        self.x_NA = model_kinetics[40:53]
+        self.x_F = model_kinetics[53:]
+
+        if model_conductances is None:
+            model_parameters = KernikModelParameters()
+            self.model_conductances = model_parameters.return_conductances()
+        self.model_conductances = model_conductances
+        
     def i_K1(self, v_m, E_K, g_K1):
-        xK11 = self.x_K1[1]
-        xK12 = self.x_K1[2]
-        xK13 = self.x_K1[3]
-        xK14 = self.x_K1[4]
-        xK15 = self.x_K1[5]
+        xK11 = self.x_K1[0]
+        xK12 = self.x_K1[1]
+        xK13 = self.x_K1[2]
+        xK14 = self.x_K1[3]
+        xK15 = self.x_K1[4]
 
         alpha_xK1 = xK11*exp((v_m+xK13)/xK12)
         beta_xK1 = exp((v_m+xK15)/xK14)
         XK1_inf = alpha_xK1/(alpha_xK1+beta_xK1)
 
         # Current:
-        g_K1 = self.x_K1[0] * g_K1 
+        g_K1 = self.model_conductances['G_K1'] * g_K1 
         return g_K1*XK1_inf*(v_m-E_K)*sqrt(self.Ko/5.4)
 
     def i_Kr(self, v_m, E_K, Xr1, Xr2, g_Kr):
         # define parameters from x_KR
-        Xr1_1 = self.x_KR[1]
-        Xr1_2 = self.x_KR[2]
-        Xr1_5 = self.x_KR[3]
-        Xr1_6 = self.x_KR[4]
-        Xr2_1 = self.x_KR[5]
-        Xr2_2 = self.x_KR[6]
-        Xr2_5 = self.x_KR[7]
-        Xr2_6 = self.x_KR[8]
+        Xr1_1 = self.x_KR[0]
+        Xr1_2 = self.x_KR[1]
+        Xr1_5 = self.x_KR[2]
+        Xr1_6 = self.x_KR[3]
+        Xr2_1 = self.x_KR[4]
+        Xr2_2 = self.x_KR[5]
+        Xr2_5 = self.x_KR[6]
+        Xr2_6 = self.x_KR[7]
 
         # parameter-dependent values:
         Xr1_3 = Xr1_5*Xr1_1
@@ -83,27 +85,27 @@ class KernikCurrents():
         alpha_Xr1 = Xr1_1*exp((v_m)/Xr1_2)
         beta_Xr1 = Xr1_3*exp((v_m)/Xr1_4)
         Xr1_inf = alpha_Xr1/(alpha_Xr1 + beta_Xr1)
-        tau_Xr1 = ((1./(alpha_Xr1 + beta_Xr1))+self.x_KR[9])
+        tau_Xr1 = ((1./(alpha_Xr1 + beta_Xr1))+self.x_KR[8])
         d_Xr1 = (Xr1_inf-Xr1)/tau_Xr1
 
         # 11: Xr2 (dimensionless) (inactivation in i_Kr_Xr2)
         alpha_Xr2 = Xr2_1*exp((v_m)/Xr2_2)
         beta_Xr2 = Xr2_3*exp((v_m)/Xr2_4)
         Xr2_inf = alpha_Xr2/(alpha_Xr2+beta_Xr2)
-        tau_Xr2 = ((1./(alpha_Xr2+beta_Xr2))+self.x_KR[10])
+        tau_Xr2 = ((1./(alpha_Xr2+beta_Xr2))+self.x_KR[9])
         d_Xr2 = (Xr2_inf-Xr2)/tau_Xr2
 
         # Current:
-        g_Kr = self.x_KR[0]*g_Kr  # nS_per_pF (in i_Kr)
+        g_Kr = self.model_conductances['G_Kr'] * g_Kr  # nS_per_pF (in i_Kr)
         i_Kr = g_Kr*(v_m-E_K)*Xr1*Xr2*sqrt(self.Ko/5.4)
         return [d_Xr1, d_Xr2, i_Kr]
 
     def i_Ks(self, v_m, E_K, Xs, g_Ks):
-        ks1 = self.x_IKS[1]
-        ks2 = self.x_IKS[2]
-        ks5 = self.x_IKS[3]
-        ks6 = self.x_IKS[4]
-        tauks_const = self.x_IKS[5]
+        ks1 = self.x_IKS[0]
+        ks2 = self.x_IKS[1]
+        ks5 = self.x_IKS[2]
+        ks6 = self.x_IKS[3]
+        tauks_const = self.x_IKS[4]
 
         # parameter-dependent values:
         ks3 = ks5*ks1
@@ -117,23 +119,23 @@ class KernikCurrents():
         d_Xs = (Xs_inf-Xs)/tau_Xs
 
         # Current:
-        g_Ks = self.x_IKS[0]*g_Ks  # nS_per_pF (in i_Ks)
+        g_Ks = self.model_conductances['G_Ks']*g_Ks  # nS_per_pF (in i_Ks)
         i_Ks = g_Ks*(v_m-E_K)*(Xs**2)
 
         return [d_Xs, i_Ks]
 
     def i_to(self, v_m, E_K, s, r, g_to):
         # Transient outward current (Ito): define parameters from xTO
-        r1 = self.xTO[1]
-        r2 = self.xTO[2]
-        r5 = self.xTO[3]
-        r6 = self.xTO[4]
-        s1 = self.xTO[5]
-        s2 = self.xTO[6]
-        s5 = self.xTO[7]
-        s6 = self.xTO[8]
-        tau_r_const = self.xTO[9]
-        tau_s_const = self.xTO[10]
+        r1 = self.xTO[0]
+        r2 = self.xTO[1]
+        r5 = self.xTO[2]
+        r6 = self.xTO[3]
+        s1 = self.xTO[4]
+        s2 = self.xTO[5]
+        s5 = self.xTO[6]
+        s6 = self.xTO[7]
+        tau_r_const = self.xTO[8]
+        tau_s_const = self.xTO[9]
 
         # parameter-dependent values:
         r3 = r5*r1
@@ -156,21 +158,21 @@ class KernikCurrents():
         d_r = (r_inf-r)/tau_r
 
         # Current:
-        g_to = self.xTO[0]*g_to  # nS_per_pF (in i_to)
+        g_to = self.model_conductances['G_To']*g_to  # nS_per_pF (in i_to)
         i_to = g_to*(v_m-E_K)*s*r
         return [d_s, d_r, i_to]
 
     def i_CaL(self, v_m, d, f, fCa, Cai, Nai, Ki, p_CaL):
-        d1 = self.x_cal[1]
-        d2 = self.x_cal[2]
-        d5 = self.x_cal[3]
-        d6 = self.x_cal[4]
-        f1 = self.x_cal[5]
-        f2 = self.x_cal[6]
-        f5 = self.x_cal[7]
-        f6 = self.x_cal[8]
-        taud_const = self.x_cal[9]
-        tauf_const = self.x_cal[10]
+        d1 = self.x_cal[0]
+        d2 = self.x_cal[1]
+        d5 = self.x_cal[2]
+        d6 = self.x_cal[3]
+        f1 = self.x_cal[4]
+        f2 = self.x_cal[5]
+        f5 = self.x_cal[6]
+        f6 = self.x_cal[7]
+        taud_const = self.x_cal[8]
+        tauf_const = self.x_cal[9]
 
         # parameter-dependent values:
         d3 = d5*d1
@@ -219,7 +221,7 @@ class KernikCurrents():
         d_fCa = k_fca*(fCa_inf-fCa)/tau_fCa
 
         # Current
-        p_CaL = self.x_cal[0]*p_CaL  # nS_per_pF (in i_CaL)
+        p_CaL = self.model_conductances['G_CaL']*p_CaL  # nS_per_pF (in i_CaL)
         p_CaL_shannonCa = 5.4e-4
         p_CaL_shannonNa = 1.5e-8
         p_CaL_shannonK = 2.7e-7
@@ -262,7 +264,7 @@ class KernikCurrents():
             ((v_m)+61.7)/15.38))
         d_fCaT = (fcat_inf-fCaT)/tau_fcat
 
-        g_CaT = self.x_cat*g_CaT # nS_per_pF (in i_CaT)
+        g_CaT = self.model_conductances['G_CaT']*g_CaT # nS_per_pF (in i_CaT)
         i_CaT = g_CaT*(v_m-E_Ca)*dCaT*fCaT
 
         return [d_dCaT, d_fCaT, i_CaT]
@@ -270,19 +272,19 @@ class KernikCurrents():
     def i_Na(self, v_m, E_Na, h, j, m, g_Na):
         # Sodium Current (INa):
         # define parameters from x_Na
-        m1 = self.x_NA[1]
-        m2 = self.x_NA[2]
-        m5 = self.x_NA[3]
-        m6 = self.x_NA[4]
-        h1 = self.x_NA[5]
-        h2 = self.x_NA[6]
-        h5 = self.x_NA[7]
-        h6 = self.x_NA[8]
-        j1 = self.x_NA[9]
-        j2 = self.x_NA[10]
-        tau_m_const = self.x_NA[11]
-        tau_h_const = self.x_NA[12]
-        tau_j_const = self.x_NA[13]
+        m1 = self.x_NA[0]
+        m2 = self.x_NA[1]
+        m5 = self.x_NA[2]
+        m6 = self.x_NA[3]
+        h1 = self.x_NA[4]
+        h2 = self.x_NA[5]
+        h5 = self.x_NA[6]
+        h6 = self.x_NA[7]
+        j1 = self.x_NA[8]
+        j2 = self.x_NA[9]
+        tau_m_const = self.x_NA[10]
+        tau_h_const = self.x_NA[11]
+        tau_j_const = self.x_NA[12]
 
         # parameter-dependent values:
         m3 = m5*m1
@@ -316,7 +318,7 @@ class KernikCurrents():
         d_m = (m_inf-m)/tau_m
 
         # Current:
-        g_Na = self.x_NA[0]*g_Na
+        g_Na = self.model_conductances['G_Na']*g_Na
         # nS_per_pF (in i_Na)
         i_Na = g_Na*m ** 3.0*h*j*(v_m-E_Na)
 
@@ -325,11 +327,11 @@ class KernikCurrents():
     def i_f(self, v_m, E_K, E_Na, Xf, g_f):
         # Funny/HCN current (If):
         # define parameters from x_F
-        xF1 = self.x_F[1]
-        xF2 = self.x_F[2]
-        xF5 = self.x_F[3]
-        xF6 = self.x_F[4]
-        xF_const = self.x_F[5]
+        xF1 = self.x_F[0]
+        xF2 = self.x_F[1]
+        xF5 = self.x_F[2]
+        xF6 = self.x_F[3]
+        xF_const = self.x_F[4]
 
         # parameter-dependent values:
         xF3 = xF5*xF1
@@ -343,7 +345,7 @@ class KernikCurrents():
         d_Xf = (Xf_inf-Xf)/tau_Xf
 
         # Current:
-        g_f = self.x_F[0]*g_f
+        g_f = self.model_conductances['G_F']*g_f
         # nS_per_pF (in i_f)
         NatoK_ratio = .491  # Verkerk et al. 2013
         Na_frac = NatoK_ratio/(NatoK_ratio+1)
@@ -371,9 +373,8 @@ class KernikCurrents():
 
         return i_NaCa
 
-    def i_NaK(self, v_m, Nai, p_NaK):
+    def i_NaK(self, v_m, Nai, p_NaK, Km_Na=40.0):
         Km_K = 1.0    # Ko half-saturation constant millimolar (in i_NaK)
-        Km_Na = 40.0  # Nai half-saturation constant millimolar (in i_NaK)
         # maxiaml nak pA_per_pF (in i_NaK)
         PNaK = 1.362*1.818*p_NaK
         i_NaK = PNaK*((self.Ko*Nai)/((self.Ko+Km_K)*(Nai+Km_Na)*(1.0 + 0.1245*exp(
@@ -622,54 +623,3 @@ class ExperimentalArtefacts():
         v_p = v_cmd + self.alpha * self.r_pipette * i_out
 
         return v_p
-
-
-
-
-
-def kernik_model_inputs():
-    return np.array([
-        1.000000000000000000e+00, 1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.000000000000000000e+00 ,1.000000000000000000e+00
-        ,1.337857777976060036e-01 ,4.779949722170410142e-01
-        ,2.724275587934869947e+01 ,4.925023317814122947e+00
-        ,8.722237600068819319e+00 ,5.663619749982441931e+01
-        ,2.180249999999999966e-01 ,5.748852374350000259e-03
-        ,1.362349263625756812e+01 ,4.763057118183600114e-02
-        ,-7.068087429655488307e+00 ,1.245664052682700015e-02
-        ,-2.599445816443767399e+01 ,3.734263315010406359e+01
-        ,2.209196423539016507e+01 ,5.000000000000000000e+01
-        ,0.000000000000000000e+00 ,7.700000000000000247e-03
-        ,1.165584479999999925e-03 ,6.672683867589361034e+04
-        ,2.804589082499999719e-01 ,-1.886697157290999982e+01
-        ,4.741149999999999491e-06 ,1.178333333332999971e-01
-        ,5.536141817130000448e-02 ,1.168420234296690019e+01
-        ,3.989181080377499633e+00 ,-1.104713930120320065e+01
-        ,3.442309443000000132e-04 ,-1.763447228980960091e+01
-        ,1.867605369096950199e+02 ,8.180933873322700833e+00
-        ,6.967584211714999975e-01 ,1.122445772394689989e+01
-        ,3.080276913789999904e-01 ,1.296629418972199943e+01
-        ,7.079145964710999550e+00 ,4.490941550699999868e-02
-        ,-6.909880369241999887e+00 ,5.125898259999999871e-04
-        ,-4.950571203386999741e+01 ,1.931211223514319045e+03
-        ,5.730027499698999272e+00 ,1.658246946830000068e+00
-        ,1.004625591711029955e+02 ,1.849999999999999978e-01
-        ,9.720613409241000369e+00 ,1.080458463848179917e+02
-        ,1.310701573394099917e+01 ,2.326914366999999640e-03
-        ,-7.917726289513000282e+00 ,3.626598863999999992e-03
-        ,-1.983935886002599958e+01 ,9.663294977114741414e+03
-        ,7.395503564612999625e+00 ,5.122571819999999351e-04
-        ,-6.658375550265199649e+01 ,3.197758038399999697e-02
-        ,1.673315025160000136e-01 ,9.510887249620000317e-01
-        ,4.349999999999999700e-02 ,5.789700000000000023e-07
-        ,-1.458971217019999855e+01 ,2.008665023788437247e+04
-        ,1.020235284528000186e+01 ,2.394529134652999858e+01
-        ,0.000000000000000000e+00 ,0.000000000000000000e+00
-        ,0.000000000000000000e+00 ,0.000000000000000000e+00
-        ,0.000000000000000000e+00])

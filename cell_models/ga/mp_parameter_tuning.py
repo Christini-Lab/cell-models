@@ -27,107 +27,11 @@ from cell_models import kernik
 from cell_models import protocols
 from cell_models import trace
 
-from cell_models.rtxi.target_objective import TargetObjective
+from cell_models.ga.target_objective import TargetObjective
 from cell_models.ga import ga_configs
 from cell_models.ga import genetic_algorithm_results
 from cell_models.ga.model_target_objective import ModelTarget
 
-
-class GAParams():
-    """
-    Initializes and runs a parameter tuning GA
-
-    Parameters
-    ----------
-    model_name: String
-        The name can be any model in cell_models. Currently: 'Kernik', 'Paci',
-        or 'Ohara-Rudy'
-    vc_config: cell_models.ga.ga_configs.ParameterTuningConfig() object
-        Contains all of the GA configuration data for a particular parameter
-        tuning GA
-    protocol: cell_models.protocols type object
-    is_parameter_recovery: boolean
-        Default is True. This part of the code needs to be edited when we want 
-        to fit to experimental data.
-    is_target_baseline : boolean
-        If this is true, then the target objective will be the baseline model.
-        If this is false, the target objective will be a random model selected
-        as index 5 from models_at_ss.npy
-    """
-
-    def __init__(self, model_name, vc_config,
-                 protocols, is_parameter_recovery=True,
-                 is_target_baseline=True):
-        """
-        Initialize the class
-        """
-        if model_name == "Kernik":
-            self.cell_model = KernikModel
-        elif model_name == "Paci":
-            self.cell_model = PaciModel
-
-        self.vc_config = vc_config
-        self.protocols = protocols
-        self.previous_population = None
-        self.target_params = None
-
-def initialize_target(ga_params, is_baseline=True, updated_parameters=None):
-    """
-    Initialize the target objective. This will produce a random trace
-    to fit to.
-
-    Parameters
-    ----------
-    updated_parameters : dict of conductance values
-    The default, None, will produce a random individual
-    """
-    if is_baseline and (updated_parameters is not None):
-        print(
-            """InputError: ParameterTuningGeneticAlgorithm.initialize_target()
-           was given incompatible inputs. You should not set is_baseline to
-           True and add a value for updated_parameters""")
-
-
-    if not is_baseline:
-        if ga_params.vc_config.with_exp_artefact:
-            random_ss = np.load(pkg_resources.resource_stream(
-                __name__, "models_at_ss_artefact.npy"), allow_pickle=True)
-        else:
-            random_ss = np.load(pkg_resources.resource_stream(
-                __name__, "models_at_ss.npy"), allow_pickle=True)
-
-        index = random.randint(0, 8)
-
-        print(f"Taking random trace with index {index}")
-
-        target_cell = ga_params.cell_model(
-            updated_parameters=random_ss[index][0],
-            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
-
-        GA_PARAMS.target_params = random_ss[index][0]
-
-        target_cell.y_initial = random_ss[index][1]
-        target_cell.y_ss = random_ss[index][1]
-
-    else:
-        target_cell = ga_params.cell_model(
-            is_exp_artefact=ga_params.vc_config.with_exp_artefact)
-        baseline_y_ss = np.load(pkg_resources.resource_stream(
-                __name__, "baseline_ss.npy"), allow_pickle=True)
-
-        if ga_params.vc_config.with_exp_artefact:
-            target_cell.y_initial[0:23] = baseline_y_ss[1]
-            target_cell.y_ss = target_cell.y_initial
-        else:
-            target_cell.y_ss = baseline_y_ss[1]
-            target_cell.y_initial = baseline_y_ss[1]
-
-    traces = {}
-
-    for current, protocol in ga_params.protocols.items():
-        traces[current] = get_model_response(target_cell, protocol)
-
-    return traces
 
 def run_ga(ga_params, toolbox):
     """
@@ -139,10 +43,10 @@ def run_ga(ga_params, toolbox):
     """
     print('Evaluating initial population.')
 
-    population = toolbox.population(ga_params.vc_config.population_size)
+    population = toolbox.population(ga_params.population_size)
 
-    targets = [copy.deepcopy(ga_params.vc_config.targets) for i in range(
-        0, ga_params.vc_config.population_size)]
+    targets = [copy.deepcopy(ga_params.targets) for i in range(
+        0, ga_params.population_size)]
 
     eval_input = np.transpose([population, targets])
 
@@ -163,7 +67,7 @@ def run_ga(ga_params, toolbox):
 
     avg_fitness = []
 
-    for generation in range(1, ga_params.vc_config.max_generations):
+    for generation in range(1, ga_params.max_generations):
         print('Generation {}'.format(generation))
         # Offspring are chosen through tournament selection. They are then
         # cloned, because they will be modified in-place later on.
@@ -174,13 +78,13 @@ def run_ga(ga_params, toolbox):
         offspring = [toolbox.clone(i) for i in selected_offspring]
 
         for i_one, i_two in zip(offspring[::2], offspring[1::2]):
-            if random.random() < ga_params.vc_config.mate_probability:
+            if random.random() < ga_params.mate_probability:
                 toolbox.mate(i_one, i_two)
                 del i_one.fitness.values
                 del i_two.fitness.values
 
         for i in offspring:
-            if random.random() < ga_params.vc_config.mutate_probability:
+            if random.random() < ga_params.mutate_probability:
                 toolbox.mutate(i)
                 del i.fitness.values
 
@@ -188,7 +92,7 @@ def run_ga(ga_params, toolbox):
         # mutation, will be re-evaluated.
         updated_individuals = [i for i in offspring if not i.fitness.values]
 
-        targets = [copy.deepcopy(ga_params.vc_config.targets) for i in
+        targets = [copy.deepcopy(ga_params.targets) for i in
                      range(0, len(updated_individuals))]
 
         eval_input = np.transpose([updated_individuals, targets])
@@ -225,8 +129,8 @@ def run_ga(ga_params, toolbox):
 
     
     final_ga_results = genetic_algorithm_results.GAResultParameterTuning(
-            'kernik', TARGETS, GA_PARAMS.target_params,
-            final_population, GA_PARAMS.vc_config,
+            'kernik', TARGETS, 
+            final_population, GA_PARAMS,
             )
 
     return final_ga_results
@@ -260,8 +164,9 @@ def get_model_response(model, command, prestep=5000.0, is_command_prestep=True):
     if isinstance(command, TargetObjective):
         if command.protocol_type == 'Dynamic Clamp':
             #TODO: Aperiodic Pacing Protocol
+
             prestep_protocol = protocols.AperiodicPacingProtocol(
-                GA_PARAMS.vc_config.model_name)
+                GA_PARAMS.model_name)
             command = prestep_protocol
             model.generate_response(prestep_protocol,
                         is_no_ion_selective=True)
@@ -285,7 +190,7 @@ def get_model_response(model, command, prestep=5000.0, is_command_prestep=True):
     return response_trace
 
 
-def _initialize_individuals(vc_config, cell_model):
+def _initialize_individuals(ga_configuration, cell_model):
     """
     Creates the initial population of individuals. The initial 
     population 
@@ -294,17 +199,17 @@ def _initialize_individuals(vc_config, cell_model):
         A model instance with a new set of parameters
     """
     # Builds a list of parameters using random upper and lower bounds.
-    lower_exp = log10(vc_config.params_lower_bound)
-    upper_exp = log10(vc_config.params_upper_bound)
+    lower_exp = log10(ga_configuration.params_lower_bound)
+    upper_exp = log10(ga_configuration.params_upper_bound)
     initial_params = [10**random.uniform(lower_exp, upper_exp)
                       for i in range(0, len(
-                          vc_config.tunable_parameters))]
+                          ga_configuration.tunable_parameters))]
 
-    keys = [val.name for val in vc_config.tunable_parameters]
+    keys = [val.name for val in ga_configuration.tunable_parameters]
 
     return cell_model(
         updated_parameters=dict(zip(keys, initial_params)),
-        is_exp_artefact=vc_config.with_exp_artefact)
+        is_exp_artefact=ga_configuration.with_exp_artefact)
 
 
 def _evaluate_recovery(eval_input):
@@ -323,44 +228,21 @@ def _evaluate_recovery(eval_input):
 
     errors = []
 
-    for current_target, command in input_commands.items():
+    for current_target_name, command in input_commands.items():
         individual_model.y_ss = None
         individual_model.y_initial = y_initial
 
-        updated_parameters = individual_model.default_parameters
-
+        #TODO: Move model runs to .compare_individual()
         try:
-            if command.protocol_type == 'Dynamic Clamp':
-                if isinstance(command, TargetObjective):
-                    g_k1_ishi = command.g_ishi
-                    individual_model = GA_PARAMS.cell_model(
-                            updated_parameters=updated_parameters,
-                            no_ion_selective_dict={'I_K1_Ishi': g_k1_ishi},
-                            is_exp_artefact=False)
-                else:
-                    individual_model = GA_PARAMS.cell_model(
-                            updated_parameters=updated_parameters,
-                            is_exp_artefact=False)
-
-                new_trace = get_model_response(individual_model,
-                                               command,
-                                               is_command_prestep=False)
-            else:
-                individual_model = GA_PARAMS.cell_model(
-                        updated_parameters=updated_parameters, 
-                        is_exp_artefact=GA_PARAMS.vc_config.with_exp_artefact)
-
-                new_trace = get_model_response(individual_model, command)
-
-            target = TARGETS[current_target]
-
-            error = target.compare_individual(new_trace)
+            error = command.compare_individual(individual_model)
         except:
-            error = 10E8
+            print('Issue with .compare_individual()')
+            error = 10E9
 
         errors.append(log10(error))
 
     return errors
+
 
 def _mate(i_one, i_two):
     """Performs crossover between two individuals.
@@ -374,11 +256,12 @@ def _mate(i_one, i_two):
         i_two: Another individual in the population.
     """
     for key, val in i_one[0].default_parameters.items():
-        if random.random() < GA_PARAMS.vc_config.gene_swap_probability:
+        if random.random() < GA_PARAMS.gene_swap_probability:
             i_one[0].default_parameters[key],\
                 i_two[0].default_parameters[key] = (
                     i_two[0].default_parameters[key],
                     i_one[0].default_parameters[key])
+
 
 def _mutate(individual):
     """Performs a mutation on an individual in the population.
@@ -390,22 +273,22 @@ def _mutate(individual):
     Args:
         individual: An individual to be mutated.
     """
-    keys = [p.name for p in GA_PARAMS.vc_config.tunable_parameters]
+    keys = [p.name for p in GA_PARAMS.tunable_parameters]
 
     for key in keys:
-        if random.random() < GA_PARAMS.vc_config.gene_mutation_probability:
+        if random.random() < GA_PARAMS.gene_mutation_probability:
             new_param = -1
 
-            while ((new_param < GA_PARAMS.vc_config.params_lower_bound) or
-                   (new_param > GA_PARAMS.vc_config.params_upper_bound)):
+            while ((new_param < GA_PARAMS.params_lower_bound) or
+                   (new_param > GA_PARAMS.params_upper_bound)):
                 new_param = np.random.normal(
                         individual[0].default_parameters[key],
                         individual[0].default_parameters[key] * .1)
 
             individual[0].default_parameters[key] = new_param
 
+
 def generate_statistics(population: List[List[List[float]]]) -> None:
-    #for index, current in enumerate(list(GA_PARAMS.vc_config.protocols.keys())):
     for index in range(0, len(population[0].fitness.values)):
         fitness_values = [i.fitness.values[index] for i in population]
         #print(f'Details for: {current}')
@@ -414,21 +297,24 @@ def generate_statistics(population: List[List[List[float]]]) -> None:
         print('\t\tAverage fitness: {}'.format(np.mean(fitness_values)))
         print('\t\tStandard deviation: {}'.format(np.std(fitness_values)))
 
+
 creator.create('FitnessMulti', base.Fitness, weights=(-1.0, -1.0, -1.0,
-                                                    -1.0, -1.0, -1.0))
+                    -1.0, -1.0, -1.0))
+        
 
 creator.create('Individual', list, fitness=creator.FitnessMulti)
 
-def start_ga(target_objectives, vc_config, is_baseline=True):
+
+def start_ga(ga_configuration):
     global GA_PARAMS
     global TARGETS
 
-    GA_PARAMS = GAParams(vc_config.model_name, vc_config, target_objectives)
+    GA_PARAMS = ga_configuration
 
     toolbox = base.Toolbox()
     toolbox.register('init_param',
                      _initialize_individuals,
-                     GA_PARAMS.vc_config,
+                     GA_PARAMS,
                      GA_PARAMS.cell_model)
     toolbox.register('individual',
                      tools.initRepeat,
@@ -440,12 +326,12 @@ def start_ga(target_objectives, vc_config, is_baseline=True):
                      list,
                      toolbox.individual)
 
-    TARGETS = target_objectives
+    TARGETS = ga_configuration.targets
 
     toolbox.register('evaluate', _evaluate_recovery)
     toolbox.register('select',
                      tools.selTournament,
-                     tournsize=GA_PARAMS.vc_config.tournament_size)
+                     tournsize=GA_PARAMS.tournament_size)
 
     toolbox.register('mate', _mate)
     toolbox.register('mutate', _mutate)

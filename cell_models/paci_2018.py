@@ -35,6 +35,9 @@ class PaciModel(CellModel):
     v_leak_per_second = 4.7279e-4
     alpha_in_i_na_ca = 2.5371
 
+    # half-saturation constant millimolar (in i_NaK)
+    Km_Na = 40.0
+
     # Constants (in model parameters).
     f_coulomb_per_mole = 96485.3415
     r_joule_per_mole_kelvin = 8.314472
@@ -91,7 +94,8 @@ class PaciModel(CellModel):
                  concentration_indices={'Ca_SR': 1,
                                         'Cai': 2,
                                         'Nai': 17},
-                 ki_millimolar=130):
+                 ki_millimolar=130,
+                 nai_millimolar=None):
         """Creates a Paci Model individual
 
         Leave `updated_parameters` argument empty if generating baseline trace
@@ -104,6 +108,7 @@ class PaciModel(CellModel):
                 equal to zero
         """
         self.ki_millimolar = ki_millimolar
+        self.nai_millimolar = nai_millimolar
 
         default_parameters = {
             'G_Na': 1,
@@ -118,6 +123,7 @@ class PaciModel(CellModel):
             'G_bCa': 1,
             'G_NaL': 1,
             'K_NaCa': 1,
+            'P_NaK': 1,
             'G_seal_leak': 1,
             'V_off': 1,
             'pipette_scale': 1
@@ -144,12 +150,14 @@ class PaciModel(CellModel):
 
     def action_potential_diff_eq(self, t, y):
         if self.is_exp_artefact:
-            d_y = np.zeros(27)
+            d_y = np.zeros(28)
         else:
             d_y = np.zeros(24)
 
 
         # Nernst potential
+        if self.nai_millimolar is not None:
+            y[17] = self.nai_millimolar
         try:
             e_na = self.r_joule_per_mole_kelvin *  self.t_kelvin / self.f_coulomb_per_mole * log( self.nao_millimolar / y[17])
         except ValueError:
@@ -157,6 +165,7 @@ class PaciModel(CellModel):
 
             y[17] = 8.6
             e_na = self.r_joule_per_mole_kelvin *  self.t_kelvin / self.f_coulomb_per_mole * log( self.nao_millimolar / y[17])
+
 
         try:
             e_ca = 0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / self.f_coulomb_per_mole * log(
@@ -400,8 +409,8 @@ class PaciModel(CellModel):
 
         # i NaK
         km_k_millimolar = 1.0
-        km_na_millimolar = 40.0
-        p_na_k1 = self.p_na_k_a_per_f
+        km_na_millimolar = self.Km_Na
+        p_na_k1 = self.p_na_k_a_per_f * self.default_parameters['P_NaK']
         i_na_k = (
             p_na_k1 * self.ko_millimolar /
             (self.ko_millimolar + km_k_millimolar) * y[17] /

@@ -64,14 +64,14 @@ class CellModel:
 
             e_leak = 0 #mV
             # Change g_leak
-            g_leak = 1/.6 * default_parameters['G_seal_leak'] #1/Gohms
+            g_leak = 1/1 * default_parameters['G_seal_leak'] #1/Gohms
 
             # Change v_off
             v_off_shift = np.log10(default_parameters['V_off']) * 2
             v_off = -2.8 + v_off_shift  #mV
 
             c_p = 4 #pf
-            r_pipette = 10E-3 #Gohms
+            r_pipette = 5E-3 #Gohms
             c_m = 60 # pf
             r_access = 25E-3 #Gohms
 
@@ -167,7 +167,7 @@ class CellModel:
         """Returns a trace based on the specified target objective.
 
         Args:
-            protocol: An object of a specified protocol.
+            protocol: A Protocol Object or a TargetObjective Object.
 
         Returns:
             A Trace object representing the change in membrane potential over
@@ -182,7 +182,7 @@ class CellModel:
 
         self.is_no_ion_selective = is_no_ion_selective
         
-        from cell_models.rtxi.target_objective import TargetObjective
+        from cell_models.ga.target_objective import TargetObjective
 
         if isinstance(protocol, protocols.SpontaneousProtocol):
             return self.generate_spontaneous_response(protocol)
@@ -194,13 +194,23 @@ class CellModel:
             return self.generate_pacing_response(protocol)
         elif isinstance(protocol, protocols.AperiodicPacingProtocol):
             return self.generate_aperiodic_pacing_response(protocol)
+        #This means, the input is a Target Objective
         elif isinstance(protocol, TargetObjective):
-            if protocol.protocol_type == "Voltage Clamp":
+            #This is if the input Target Objective is a protocol
+            if protocol.target_protocol is not None:
+                if protocol.g_ishi is not None:
+                    self.no_ion_selective = {'I_K1_Ishi': protocol.g_ishi}
+                    is_no_ion_selective = True
+
+                return self.generate_response(protocol.target_protocol,
+                        is_no_ion_selective)
+            #These are if the input Target Objective is exp data
+            elif protocol.protocol_type == "Voltage Clamp":
                 return self.generate_exp_voltage_clamp(protocol)
             elif protocol.protocol_type == "Dynamic Clamp":
                 return self.generate_exp_current_clamp(protocol)
 
-    def find_steady_state(self, ss_type=None, from_peak=False, time_unit='ms', tol = 1E-3, max_iters=140):
+    def find_steady_state(self, ss_type=None, from_peak=False, tol=1E-3, max_iters=140):
         """
         Finds the steady state conditions for a spontaneous or stimulated
         (in the case of OR) AP
@@ -208,13 +218,9 @@ class CellModel:
         if self.y_ss is not None:
             return
 
-        if (ss_type is None) and (self.time_conversion == 1000.0):
+        if (ss_type is None):
             protocol = protocols.VoltageClampProtocol(
                 [protocols.VoltageClampStep(voltage=-80.0, duration=10000)])
-
-        if (ss_type is None) and (self.time_conversion == 1.0):
-            protocol = protocols.VoltageClampProtocol(
-                [protocols.VoltageClampStep(voltage=-.080, duration=10)])
 
         concentration_indices = list(self.concentration_indices.values())
 
@@ -229,7 +235,7 @@ class CellModel:
         while is_err:
             init_t = time.time()
 
-            tr = self.generate_response(protocol)
+            tr = self.generate_response(protocol, is_no_ion_selective=False)
 
             if isinstance(protocol, protocols.VoltageClampProtocol):
                 y_val = self.y[:, -1]
@@ -248,8 +254,8 @@ class CellModel:
                 is_err = not is_below_tol.all()
 
             if i > max_iters:
-                print("Did not reach steady state")
-                self.y_ss = np.ones(23)
+                print("Did not reach steady state. Setting y_ss to last iter.")
+                self.y_ss = y_val
                 return
 
             i = i + 1
@@ -314,7 +320,9 @@ class CellModel:
             print('Model could not produce trace.')
             return None
 
-        return trace.Trace(self.t,
+        return trace.Trace(protocol,
+                           self.default_parameters,
+                           self.t,
                            self.y_voltage,
                            current_response_info=self.current_response_info,
                            default_unit=self.default_unit)
@@ -350,7 +358,8 @@ class CellModel:
 
         except ValueError:
             return None
-        return trace.Trace(self.t, self.y_voltage, pacing_info=pacing_info,
+        return trace.Trace(protocol, self.default_parameter, self.t,
+                self.y_voltage, pacing_info=pacing_info,
                 default_unit=self.default_unit)
 
     def generate_irregular_pacing_function(self, protocol, pacing_info):
@@ -420,7 +429,9 @@ class CellModel:
 
         self.calc_currents()
 
-        return trace.Trace(self.t,
+        return trace.Trace(protocol,
+                           self.default_parameters,
+                           self.t,
                            command_voltages=self.command_voltages,
                            y=self.y_voltages,
                            current_response_info=self.current_response_info,
@@ -474,7 +485,9 @@ class CellModel:
 
         self.calc_currents()
 
-        return trace.Trace(self.t, self.y_voltage, pacing_info=pacing_info,
+        return trace.Trace(protocol,
+                           self.default_parameters,
+                self.t, self.y_voltage, pacing_info=pacing_info,
                 current_response_info=self.current_response_info,
                 default_unit=self.default_unit)
 
@@ -524,8 +537,8 @@ class CellModel:
 
         self.calc_currents()
 
-        return trace.Trace(self.t, self.y_voltage,
-                current_response_info=self.current_response_info,
+        return trace.Trace(protocol, self.default_parameters, self.t,
+                self.y_voltage, current_response_info=self.current_response_info,
                 default_unit=self.default_unit)
 
     def generate_aperiodic_pacing_function(self, protocol):
@@ -568,7 +581,8 @@ class CellModel:
                 1E3 * self.time_conversion],
             y_init,
             method='BDF',
-            max_step=1e-3*self.time_conversion)
+            max_step=1e-3*self.time_conversion,
+            atol=1E-2, rtol=1E-4)
 
         self.t = solution.t
         self.y = solution.y
@@ -592,7 +606,7 @@ class CellModel:
         #plt.plot(self.t, self.y_voltages)
         #plt.show()
 
-        return trace.Trace(self.t,
+        return trace.Trace(exp_target, self.t,
                            command_voltages=self.command_voltages,
                            y=self.y_voltages,
                            current_response_info=self.current_response_info,
@@ -652,7 +666,7 @@ class CellModel:
         voltages_offset_added = (self.y_voltages +
                 self.artefact_parameters['v_off'] / 1000 * self.time_conversion)
 
-        return trace.Trace(self.t,
+        return trace.Trace(exp_target, self.t,
                            y=voltages_offset_added,
                            current_response_info=self.current_response_info,
                            voltages_with_offset=self.y_voltages,

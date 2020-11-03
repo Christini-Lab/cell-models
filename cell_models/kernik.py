@@ -17,15 +17,14 @@ class KernikModel(CellModel):
     """An implementation of the Kernik model by Kernik et al.
 
     Attributes:
-        default_parameters: A dict containing tunable parameters along with
-            their default values as specified in Kernik et al.
         updated_parameters: A dict containing all parameters that are being
             tuned.
+        
     """
     cm_farad = 60
 
     # Constants
-    t_kelvin = 310.0  
+    t_kelvin = 310.0
     r_joule_per_mole_kelvin = 8.314472
     f_coulomb_per_mmole = 96.4853415
 
@@ -33,21 +32,34 @@ class KernikModel(CellModel):
     Cao = 1.8  # millimolar (in model_parameters
     Nao = 140.0  # millimolar (in model_parameters)
 
-    def __init__(self, default_parameters=None,
-                 updated_parameters=None,
-                 no_ion_selective_dict=None,
+    # half-saturation constant millimolar (in i_NaK)
+    Km_Na = 40
+
+    def __init__(self, updated_parameters=None,
+                 no_ion_selective=None,
                  default_time_unit='ms',
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
                                         'Nai': 3, 'Ki': 4},
                  is_exp_artefact=False,
-                 ki_millimolar=None
+                 ki_millimolar=None,
+                 nai_millimolar=None,
+                 model_kinetics_type='Baseline',
+                 model_conductances_type='Baseline'
                  ):
+        
+        model_parameters_obj = KernikModelParameters()
+        self.kinetics = model_parameters_obj.return_kinetics(
+                model_kinetics_type)
+        self.conductances = model_parameters_obj.return_conductances(
+                model_conductances_type)
 
         self.kernik_currents = KernikCurrents(self.Ko, self.Cao, self.Nao,
                                               self.t_kelvin,
                                               self.f_coulomb_per_mmole,
-                                              self.r_joule_per_mole_kelvin)
+                                              self.r_joule_per_mole_kelvin,
+                                              model_kinetics=self.kinetics,
+                                              model_conductances=self.conductances)
 
         default_parameters = {
             'G_K1': 1,
@@ -72,17 +84,35 @@ class KernikModel(CellModel):
             'pipette_scale': 1
         }
 
+        if model_conductances_type == 'Random':
+            updated_parameters = self.get_random_conductances(default_parameters)
+
         y_initial = kernik_model_initial()
         
         self.ki_millimolar = ki_millimolar
+        self.nai_millimolar = nai_millimolar
 
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
                          updated_parameters,
-                         no_ion_selective_dict,
+                         no_ion_selective,
                          default_time_unit,
                          default_voltage_unit,
                          is_exp_artefact=is_exp_artefact)
+
+    def get_random_conductances(self, default_parameters, cond_range=10):
+        updated_parameters = {}
+
+        for k, val in default_parameters.items():
+            if val == 0:
+                updated_parameters[k] = val
+            elif k in ['G_seal_leak', 'V_off', 'pipette_scale']:
+                updated_parameters[k] = val
+            else:
+                updated_parameters[k] = 10**(np.random.uniform(np.log10(1/cond_range), np.log10(cond_range)))
+
+        return updated_parameters
+                
 
     def action_potential_diff_eq(self, t, y):
         """
@@ -131,6 +161,9 @@ class KernikModel(CellModel):
 
         # --------------------------------------------------------------------
         # Reversal Potentials:
+        if self.nai_millimolar is not None:
+            y[3] = self.nai_millimolar
+
         try:
             E_Ca = (0.5 * self.r_joule_per_mole_kelvin * self.t_kelvin / 
                     self.f_coulomb_per_mmole * log(self.Cao / y[2]))  # millivolt
@@ -175,7 +208,7 @@ class KernikModel(CellModel):
 
         i_NaCa = self.kernik_currents.i_NaCa(y[0], y[2], y[3], self.default_parameters['K_NaCa'])
 
-        i_NaK = self.kernik_currents.i_NaK(y[0], y[3], self.default_parameters['P_NaK'])
+        i_NaK = self.kernik_currents.i_NaK(y[0], y[3], self.default_parameters['P_NaK'], self.Km_Na)
         
         i_up = self.kernik_currents.i_up(y[2], self.default_parameters['VmaxUp'])
 
@@ -325,25 +358,156 @@ class KernikModel(CellModel):
 
         return d_y
 
-def generate_trace(protocol, tunable_parameters=None, params=None):
-    """Generates a trace.
 
-    Leave `params` argument empty if generating baseline trace with
-    default parameter values.
+class KernikModelParameters():
 
-    Args:
-        tunable_parameters: List of tunable parameters.
-        protocol: A protocol object used to generate the trace.
-        params: A set of parameter values (where order must match with ordered
-            labels in `tunable_parameters`).
+    def __init__(self):
+        """
+        This class will prepare the kinetics and conductance values for
+        a given Kernik model.
 
-    Returns:
-        A Trace object.
-    """
-    new_params = dict()
-    if params and tunable_parameters:
-        for i in range(len(tunable_parameters)):
-            new_params[tunable_parameters[i].name] = params[
-                    tunable_parameters[i].name]
+        Parameters
+        ----------
+            kinetics – numpy 2d array
+                Each row corresponds to one kinetic parameter in the Kernik
+                model. The columns are:
+                Baseline model, Average model, STD, Min, Max
+                For reasons I do not know, the averages are usually, but
+                not always, equal to the Baseline model.
+            conductances – numpy 2d array
+                Each row corresponds to one conductance parameter in the Kernik
+                model. The columns are:
+                Baseline model, Average model, STD, Min, Max
+                For reasons I do not know, the averages are usually, but
+                not always, equal to the Baseline model.
+                The conductances are in the following order:
+                gk1 gkr gks gto gcal gcat gna gf
 
-    return KernikModel(updated_parameters=new_params).generate_response(protocol)
+        """
+        self.conductances = np.array([
+            [0.133785778, 0.167232222, 0.1539573, 0.02287708, 0.37448125],
+            [0.218025, 0.218025, 0.12307354, 0.1173, 0.38556],
+            [0.0077, 0.0077, 4.10E-03, 0.003, 0.0105],
+            [0.117833333, 0.11783333, 0.08164915, 0.025, 0.1785],
+            [0.308027691, 0.30802769, 0.14947741, 0.17779487	, 0.48404881],
+            [0.185, 0.185, 0, 0.185, 0.185],
+            [9.720613409, 7.77649073, 5.64526927, 3.314905, 14.1230769],
+            [0.0435, 0.0725, 0.03889087, 0.045, 0.1]])
+
+        self.kinetics = np.array([
+            [0.477994972, 0.477994972, 0.78032536, 0.00116634, 1.6432582],
+            [27.24275588, 27.24275588, 46.6925068, 0.30355595, 96.9390723],
+            [4.925023318, 4.925023318, 4.82603947, 0.04477989, 9.5526684],
+            [8.7222376, 5.814825067, 11.4633013, 0.0202919, 23.0096473],
+            [56.6361975, 56.6361975, 36.8545007, 5.89018309, 89.1150818],
+            [0.005748852, 0.005748852, 0.00473475, 0.00241327, 0.01261832],
+            [13.62349264, 13.62349264, 3.08586237, 9.98230902, 16.4120817],
+            [0.047630571, 0.047630571, 0.04826739, 0.01049319, 0.11682952],
+            [-7.06808743, -7.06808743, 1.09408185, -7.8373018, -5.5038416],
+            [0.012456641, 0.012456641, 0, 0.01245664, 0.01245664],
+            [-25.99445816, -25.99445816, 0, -25.994458	, -25.994458],
+            [37.34263315, 37.34263315, 0, 37.3426332, 37.3426332],
+            [22.09196424, 22.09196424, 0, 22.0919642, 22.0919642],
+            [50, 50, 0, 50, 50],
+            [0, 0, 0, 0, 0],
+            [0.001165584, 0.00116558, 1.97E-04, 0.0009384, 0.00127999],
+            [66726.83868, 66726.8387, 5.76E+04, 180.516028, 100000],
+            [0.280458908, 0.28045891, 6.53E-02, 0.22679103, 0.35315329],
+            [-18.86697157, -18.866972, 3.81E+00, -22.090645, -14.663311],
+            [4.74E-06, 4.7412E-06, 8.21E-06, 2E-11, 0.000014223],
+            [0.055361418, 0.05536142, 0.00650597, 0.04784897, 0.05911768],
+            [11.68420234, 11.6842023, 3.01474182, 9.94362942, 15.1653263],
+            [3.98918108, 3.98918108, 1.05712329, 3.37884425, 5.20984191],
+            [-11.0471393, -11.047139, 3.12062648, -14.650528, -9.2454361],
+            [0.000344231, 0.00034423, 0.00016743, 0.00015665, 0.00047856],
+            [-17.63447229, -17.634472, 5.50967004, -21.836326, -11.396544],
+            [186.7605369, 186.760537, 95.4355319, 76.7836589, 247.811605],
+            [8.180933873, 8.18093387, 1.5661887, 7.24545985, 9.98904893],
+            [0.696758421, 0.69675842, 0.28471474, 0.36799815, 0.86113936],
+            [11.22445772, 11.2244577, 3.59589485, 9.14342265, 15.3766355],
+            [12.96629419, 11.6559002, 3.97928545, 7.72471806, 15.5607957],
+            [7.079145965, 6.90656573, 0.94025736, 5.86118626, 7.87481501],
+            [0.044909416, 0.05568978, 0.02496024, 0.03255297, 0.08803088],
+            [-6.909880369, -6.7488536, 0.88944641, -7.6680726, -5.756218],
+            [0.00051259, 0.00079554, 0.00057811, 0.0003455, 0.00164438],
+            [-49.50571203, -57.74437, 17.0315447, -82.460344, -43.41689],
+            [1931.211224, 1652.96016, 1278.99495, 729.022681, 3483.75557],
+            [5.7300275, 5.38558719, 0.91724962, 4.35226625, 6.18490826],
+            [1.658246947, 1.67772716, 0.05215074, 1.61228265, 1.73616778],
+            [100.4625592, 99.7825129, 3.44090843, 97.1476341, 104.716837],
+            [108.0458464, 456.733242, 604.009439, 99.174429, 1154.10803],
+            [13.10701573, 11.3992167, 2.97074072, 7.98361855, 13.3819112],
+            [0.002326914, 0.00162761, 0.00196027, 0.00022902, 0.00386821],
+            [-7.91772629, -7.4266635, 0.90062426, -8.2138615, -6.4445379],
+            [0.003626599, 0.0036266, 0.00265009, 0.0009606, 0.0062605],
+            [-19.83935886, -19.839359, 2.34170813, -21.625645, -17.188239],
+            [9663.294977, 9890.78299, 6950.91978, 4042.29272, 17575.4543],
+            [7.395503565, 8.10022296, 1.19231566, 6.72414053, 8.82587383],
+            [0.000512257, 0.00051226, 0.00020327, 0.00027837, 0.00064626],
+            [-66.5837555, -66.583756, 6.10674426, -70.75895, -59.574965],
+            [0.03197758, 0.03197758, 0.00474363, 0.02887684, 0.03743833],
+            [0.167331503, 0.1673315, 0.02829329, 0.14962905, 0.1999625],
+            [0.951088725, 0.95108872, 0.32200385, 0.74171729, 1.32187439],
+            [5.79E-07, 9.7833E-07, 9.413E-07, 3.1273E-07, 1.6439E-06],
+            [-14.58971217, -14.474487, 0.27158838, -14.666529, -14.282445],
+            [20086.65024, 20461.5753, 1060.44821, 19711.7252, 21211.4254],
+            [10.20235285, 9.66252506, 1.52686356, 8.58286948, 10.7421806],
+            [23.94529135, 23.9452913, 33.8200742, 0.03088756, 47.8596951]])
+
+    def return_conductances(self, cond_type='Baseline'):
+        """
+        The order of conductances in self.conductances is:
+            gk1 gkr gks gto gcal gcat gna gf
+        """
+        if cond_type == 'Baseline':
+            cond = self.conductances[:, 0]
+        elif cond_type == 'Average':
+            cond = self.conductances[:, 1]
+        elif cond_type == 'Random':
+            cond = self.conductances[:, 0]
+
+        min_conductances = self.conductances[:, 3]
+        max_conductances = self.conductances[:, 4]
+
+        return dict(zip(['G_K1', 'G_Kr', 'G_Ks', 'G_To', 'G_CaL',
+            'G_CaT', 'G_Na', 'G_F'], cond))
+                
+    def return_kinetics(self, kinetics_type='Baseline'):
+        """
+        Return values kinetics values for each current
+        """
+        if kinetics_type == 'Baseline':
+            kinetics = self.kinetics[:,0]
+        elif kinetics_type == 'Average':
+            kinetics = self.kinetics[:, 1]
+        elif kinetics_type == 'Random':
+            kinetics = self.get_random_kinetics()
+
+        min_kinetics = self.kinetics[:, 3]
+        max_kinetics = self.kinetics[:, 4]
+
+        return kinetics
+
+    def get_random_kinetics(self):
+        rand_kinetics = np.zeros(58)
+        average_kinetics = self.kinetics[:, 1]
+        min_kinetics = self.kinetics[:, 3]
+        max_kinetics = self.kinetics[:, 4]
+
+        for i, k in enumerate(average_kinetics):
+            if (min_kinetics[i] == max_kinetics[i]):
+                new_val = k
+            elif average_kinetics[i] > 0:
+                curr_min = min_kinetics[i] * .8 / k
+                curr_max = max_kinetics[i] * 1.2 / k
+            elif average_kinetics[i] < 0:
+                curr_min = max_kinetics[i] * .8 / k
+                curr_max = min_kinetics[i] * 1.2 / k
+
+            new_val = k * 10**(np.random.uniform(np.log10(curr_min),
+                        np.log10(curr_max)))
+                
+
+            rand_kinetics[i] = new_val
+
+        return rand_kinetics

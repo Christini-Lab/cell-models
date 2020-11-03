@@ -160,6 +160,8 @@ class CurrentResponseInfo:
         return current
 
     def get_current(self, names):
+        if not isinstance(names, list):
+            names = [names]
         currents = []
         for i in self.currents:
             currents.append([current.value for current in i if current.name in names])
@@ -291,13 +293,12 @@ def calculate_current_contributions(currents: List[List[Current]]):
     return current_contributions
 
 
-
-
-
 class Trace:
     """Represents a spontaneous or probed response from cell.
 
     Attributes:
+        protocol: this can be either a protocol from protocols, or an
+            experimental target
         t: Timestamps of the response.
         y: The membrane voltage, in volts, at a point in time.
         pacing_info: Contains additional information about cell pacing. Will be
@@ -308,6 +309,8 @@ class Trace:
     """
 
     def __init__(self,
+                 protocol,
+                 cell_params,
                  t: List[float],
                  y: List[float],
                  command_voltages=None,
@@ -316,6 +319,8 @@ class Trace:
                  voltages_with_offset=None,
                  default_unit=None) -> None:
 
+        self.protocol = protocol
+        self.cell_params = cell_params
         self.is_interpolated = False
         self.t = np.array(t)
         self.y = np.array(y)
@@ -421,8 +426,8 @@ class Trace:
 
     def compare_individual(self, individual):
         if individual is None:
-            print("Returning 100")
-            return 100
+            print("Returning 10E9")
+            return 10E9
         if not self.is_interpolated:
             self.interp_time = np.linspace(self.t[0], self.t[-1], int(
                 self.t[-1] - self.t[0]))

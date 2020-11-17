@@ -424,18 +424,22 @@ class Trace:
         """
         return
 
+    def interpolate_current(self, time_resolution=10):
+        num_points = np.floor(self.t[-1]) * time_resolution
+        self.interp_time = np.linspace(self.t[0], np.floor(self.t[-1]),
+                num_points)
+
+        f = interp1d(self.t,
+                         self.current_response_info.get_current_summed())
+
+        self.interp_current = f(self.interp_time)
+
     def compare_individual(self, individual):
         if individual is None:
             print("Returning 10E9")
             return 10E9
         if not self.is_interpolated:
-            self.interp_time = np.linspace(self.t[0], self.t[-1], int(
-                self.t[-1] - self.t[0]))
-
-            f = interp1d(self.t,
-                         self.current_response_info.get_current_summed())
-
-            self.interp_current = f(self.interp_time)
+            self.interpolate_current()
 
             self.is_interpolated = True
 

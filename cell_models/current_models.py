@@ -1,6 +1,7 @@
 import numpy as np
 from math import log, sqrt, exp
 
+
 class KernikCurrents():
     """An implementation of all Kernik currents by Kernik et al.
 

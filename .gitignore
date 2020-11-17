@@ -9,3 +9,5 @@ tests/input_data
 cell_models/rtxi/__pychache__
 cell_models/ga/__pycache__
 */results
+*.swp
+*__pycache__

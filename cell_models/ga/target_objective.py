@@ -7,7 +7,6 @@ from scipy.interpolate import interp1d
 
 from cell_models import protocols, kernik, paci_2018, trace
 from cell_models.rtxi.rtxi_data_exploration import get_exp_as_df
-from computational_methods.process_cell_data import get_single_ap
 from h5py import File
 
 

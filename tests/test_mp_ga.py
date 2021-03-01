@@ -56,8 +56,6 @@ class TestGA(unittest.TestCase):
                                                         is_baseline=False)
 
 
-
-
     def test_fit_to_target_exp(self):
         paci_baseline = paci_2018.PaciModel(
                 no_ion_selective_dict={'I_K1_Ishi': .5})
@@ -67,6 +65,7 @@ class TestGA(unittest.TestCase):
 
         target_with_model_data = create_target_from_protocol(paci_baseline,
                     aperiodic_proto, g_ishi=cell_data.g_ishi)
+
 
     def test_baseline_parameter_tuning(self):
         """

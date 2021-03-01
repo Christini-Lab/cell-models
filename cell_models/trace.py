@@ -293,6 +293,9 @@ def calculate_current_contributions(currents: List[List[Current]]):
     return current_contributions
 
 
+
+
+
 class Trace:
     """Represents a spontaneous or probed response from cell.
 
@@ -370,7 +373,6 @@ class Trace:
 
     def get_last_ap(self):
         dv_dt = np.diff(self.y) / np.diff(self.t)
-
         dv_dt_inds = argrelextrema(dv_dt, np.greater, order=450)
         bounds = dv_dt_inds[0][-4:-2]
 

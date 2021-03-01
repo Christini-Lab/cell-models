@@ -5,7 +5,6 @@ from cell_models import kernik, paci_2018
 
 import unittest
 import matplotlib.pyplot as plt
-from computational_methods.plot_figures import plt_mult_frame
 
 
 class TestKernik(unittest.TestCase):

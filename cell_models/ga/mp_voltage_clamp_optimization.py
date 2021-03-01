@@ -38,7 +38,6 @@ def run_ga(ga_params, toolbox):
                 fitness=population[i].fitness.values[0]))
 
     final_population = [initial_population]
-
     for generation in range(1, ga_params.config.ga_config.max_generations):
         print(f'\tGeneration {generation} for {current}')
 

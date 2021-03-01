@@ -262,7 +262,6 @@ def _mate(i_one, i_two):
                     i_two[0].default_parameters[key],
                     i_one[0].default_parameters[key])
 
-
 def _mutate(individual):
     """Performs a mutation on an individual in the population.
 

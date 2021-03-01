@@ -387,31 +387,6 @@ class KernikModel(CellModel):
 
         return d_y
 
-
-class KernikModelParameters():
-
-    def __init__(self):
-        """
-        This class will prepare the kinetics and conductance values for
-        a given Kernik model.
-
-        Parameters
-        ----------
-            kinetics – numpy 2d array
-                Each row corresponds to one kinetic parameter in the Kernik
-                model. The columns are:
-                Baseline model, Average model, STD, Min, Max
-                For reasons I do not know, the averages are usually, but
-                not always, equal to the Baseline model.
-            conductances – numpy 2d array
-                Each row corresponds to one conductance parameter in the Kernik
-                model. The columns are:
-                Baseline model, Average model, STD, Min, Max
-                For reasons I do not know, the averages are usually, but
-                not always, equal to the Baseline model.
-                The conductances are in the following order:
-                gk1 gkr gks gto gcal gcat gna gf
-
         """
         self.conductances = np.array([
             [0.133785778, 0.167232222, 0.1539573, 0.02287708, 0.37448125],

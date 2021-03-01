@@ -4,6 +4,7 @@ import bisect
 from typing import List, Union
 import random
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 class SpontaneousProtocol:
@@ -19,18 +20,18 @@ class PacedProtocol:
     model_name: "Paci", "Kernik", "OR"
     """
     def __init__(self, model_name, stim_end=6000,
-                 stim_start=10, pace=1):
+                 stim_start=10, pace=1, stim_mag=1):
         """
 
         """
         if (model_name == "Kernik"):
-            self.stim_amplitude = 220
+            self.stim_amplitude = 220 * stim_mag
             self.stim_duration = 5
         elif model_name == "OR":
-            self.stim_amplitude = 80
+            self.stim_amplitude = 80 * stim_mag
             self.stim_duration = 1
         elif (model_name == "Paci"):
-            self.stim_amplitude = 220
+            self.stim_amplitude = 220 * stim_mag
             self.stim_duration = 5/1000
 
         self.pace = pace
@@ -108,6 +109,7 @@ class VoltageClampStep:
 
         self.voltage = mutate(v_bounds, self.voltage)
         self.duration = mutate(d_bounds, self.duration)
+
 
 class AperiodicPacingProtocol():
     """
@@ -364,8 +366,7 @@ class VoltageClampProtocol:
         else:
             return current_step.get_voltage(time_into_step)
 
-
-    def plot_voltage_clamp_protocol(self):
+    def plot_voltage_clamp_protocol(self, saved_to=None, is_plotted=True):
         duration = self.get_voltage_change_endpoints()[-1]
 
         times = np.arange(0, duration, 1)
@@ -385,7 +386,49 @@ class VoltageClampProtocol:
         plt.xticks(fontsize=16)
         plt.yticks(fontsize=16)
 
-        plt.show()
+        if saved_to:
+            plt.savefig(saved_to)
+            
+        if is_plotted:
+            plt.show()
+
+    def to_csv(self, path, period=0.1):
+        length_of_proto = self.get_voltage_change_endpoints()[-1]
+
+        times = np.arange(0, length_of_proto, period)
+        voltages = np.zeros(len(times))
+
+        for i, t in enumerate(times):
+            voltages[i] = self.get_voltage_at_time(t)
+
+        vcp_pd = pd.DataFrame(
+                {'Times (ms)': times, 'Voltages (mV)': voltages})
+
+        vcp_pd.to_csv(path, index=False)
+
+        return vcp_pd
+    
+    def to_csp(self, path):
+        f = open(path, "w")
+        f.write('<!DOCTYPE ClampProtocolML>\n')
+        f.write('<Clamp-Suite-Protocol-v1.0>\n')
+        f.write('<segment numSweeps="1">\n')
+
+        step_number = 0
+        for step in self.steps:
+            if isinstance(step, VoltageClampStep):
+                formatted_step = f'<step stepDuration="{step.duration}" holdingLevel1="{step.voltage}" stepNumber="{step_number}" stepType="0"/>\n'
+            else:
+                formatted_step = f'<step holdingLevel2="{step.voltage_end}" stepDuration="{step.duration}" holdingLevel1="{step.voltage_start}" stepNumber="{step_number}" stepType="1"/>\n'
+
+            f.write(formatted_step)
+            step_number += 1
+
+        f.write('</segment>\n')
+        f.write('</Clamp-Suite-Protocol-v1.0>')
+
+        f.close()
+
 
 
 

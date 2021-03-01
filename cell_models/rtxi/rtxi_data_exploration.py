@@ -13,6 +13,7 @@ import math
 import datetime
 
 
+
 def extract_channel_data(data_h5, trial_number):
     trial_str = f'Trial{trial_number}'
     data = data_h5[trial_str]['Synchronous Data']['Channel Data'][()]
@@ -75,11 +76,49 @@ def start_end_time(data_h5, trial_number):
     return start_time, end_time
 
 
-def get_current_and_voltage(f, trial):
+def get_current_and_voltage(f, trial, trial_type=None):
+
+    channels = f[f'Trial{trial}']['Synchronous Data'].keys()
+
+    v_channel = None
+    i_channel = None
+
+    for channel in channels:
+        if trial_type is not None:
+            if trial_type == 'Current Clamp':
+                if (('Current Output A' in channel)):
+                    i_channel = int(channel.split()[0]) - 1
+                if (('Voltage Input V' in channel)):
+                    v_channel = int(channel.split()[0]) - 1
+                #if (('Analog Output' in channel)):
+                #    v_channel = int(channel.split()[0]) - 1
+                #if (('Analog Input' in channel)):
+                #    i_channel = int(channel.split()[0]) - 1
+        else:
+            if (('Analog Output' in channel)):
+                v_channel = int(channel.split()[0]) - 1
+            if (('Analog Input' in channel)):
+                i_channel = int(channel.split()[0]) - 1
+
+    if v_channel is None:
+        if trial_type is not None:
+            for channel in channels:
+                if trial_type == 'Current Clamp':
+                    if (('Analog Output' in channel)):
+                        i_channel = int(channel.split()[0]) - 1
+                    if (('Analog Input' in channel)):
+                        v_channel = int(channel.split()[0]) - 1
+
     ch_data = f[f'Trial{trial}']['Synchronous Data']['Channel Data'][()]
 
-    channel_1 = ch_data[:, 0]
-    channel_2 = ch_data[:, 1]
+    if trial_type is not None:
+        if trial_type == 'Current Clamp':
+            voltage = ch_data[:, v_channel]
+            current = -ch_data[:, i_channel]
+            return current, voltage
+
+    channel_1 = ch_data[:, v_channel]
+    channel_2 = ch_data[:, i_channel]
 
     channel_1_test = channel_1[np.logical_not(np.isnan(channel_1))]
     channel_2_test = channel_2[np.logical_not(np.isnan(channel_2))]
@@ -95,42 +134,62 @@ def get_current_and_voltage(f, trial):
         current = channel_2
         voltage = channel_1
 
-    is_current_clamp = False
+    avg_early_voltage = voltage[10:100].mean()
+    is_voltage_clamp = False 
 
-    for k, v in f[f'Trial{trial}']['Parameters'].items():
-        parameter_values = v.value
+    if (avg_early_voltage < -.079) and (avg_early_voltage > -.081):
+        is_voltage_clamp = True
 
-        for p in parameter_values:
-            if 'Pace' in k:
-                if p[1] != 0:
-                    is_current_clamp = True
-    
-    is_voltage_max_in_range = (voltage.max() > .085) and (voltage.max() < .11)
-    is_voltage_min_in_range = (voltage.min() > -.21) and (voltage.min() < -.19)
-
-    if is_voltage_max_in_range  and is_voltage_min_in_range:
-        is_current_clamp = False
-
-    if is_current_clamp:
+    if not is_voltage_clamp:
         current = -current
 
     return current, voltage
 
 
-def get_exp_as_df(data_h5, trial_number, cm):
+def get_exp_as_df(data_h5, trial_number, cm=60, is_filtered=False, t_range=None,
+        trial_type=None):
     """I was going to save the time, voltage and current as a csv,
     but decided not to, because there can be >3million points in 
     the h5 dataset. If you want to make comparisons between trials or
     experiments, call this multiple times.
     """
-    current, voltage = get_current_and_voltage(data_h5, trial_number)
+    cm *= 1E-12
+    current, voltage = get_current_and_voltage(data_h5, trial_number,
+            trial_type=trial_type)
 
     t_data = get_time_data(data_h5, trial_number)
+
     d_as_frame = pd.DataFrame({'Time (s)': t_data,
                                'Voltage (V)': voltage,
                                'Current': current / cm})
 
+    if is_filtered:
+        d_as_frame = filter_data(d_as_frame) 
+
+    if t_range is not None:
+        idx_start = (d_as_frame['Time (s)']-t_range[0]).abs().idxmin()
+        idx_end = (d_as_frame['Time (s)']-t_range[1]).abs().idxmin()
+        d_as_frame = d_as_frame.copy().iloc[idx_start:idx_end, :]
+    
+
     return d_as_frame
+
+
+def filter_data(df):
+    """
+        Do a smoothing average of the data
+    """
+    min_t = df['Time (s)'].min()
+    max_t = df['Time (s)'].max()
+
+    df['Voltage (V)'] = moving_average(df['Voltage (V)'])
+    df['Current'] = moving_average(df['Current'])
+
+    return df 
+
+
+def moving_average(x, w=4):
+    return np.convolve(x, np.ones(w), mode='same') / w
 
 
 def plot_recorded_data(recorded_data, trial_number, does_plot=False, t_range=None, title=None, col=None):
@@ -204,6 +263,10 @@ def print_parameters(f, trial_number):
                         added_conditions[k] = []
                         added_conditions[k].append(
                                 f'Equal to {p[1]} at {p[0]/sampling_frequency}.')
+                    else:
+                        added_conditions[k].append(
+                                f'Equal to {p[1]} at {p[0]/sampling_frequency}.')
+
             except:
                 continue
     
@@ -235,8 +298,7 @@ def explore_data(file_path, col=None):
             print('There are tags')
             is_tags = True
 
-    cm_key = [key for key in f['Trial1']['Parameters'].keys() if 'Cm' in key][0]
-    cm = f['Trial1']['Parameters'][cm_key].value[0][1] * 1E-12
+    cm = float(input("What is the Cm for this cell? "))
 
     print(trial_names)
 
@@ -246,13 +308,31 @@ def explore_data(file_path, col=None):
     else:
         trial_range = range(int(trial_number), int(trial_number) + 1)
 
+    is_filtered = input(f"Would you like to display filtered data? ")
+
+    if is_filtered.lower() == 'yes':
+        is_filtered = True
+    else:
+        is_filtered = False
+
+    time_start = f[f'Trial1']['Date'].value.decode('utf-8')
+    tr1_start = datetime.datetime.strptime(time_start, '%Y-%m-%dT%H:%M:%S')
+
     for trial in trial_range:
         print_parameters(f, trial)
 
         if is_tags:
             get_tags(f, trial)
 
-        recorded_data = get_exp_as_df(f, trial, cm)
+        recorded_data = get_exp_as_df(f, trial, cm, is_filtered=is_filtered)
         
-        plot_recorded_data(recorded_data, trial, does_plot, title=f'Trial {trial}', col=col)
+        time_start = f[f'Trial{trial}']['Date'].value.decode('utf-8')
+        tr_time = datetime.datetime.strptime(time_start, '%Y-%m-%dT%H:%M:%S')
 
+        t_delta = tr_time - tr1_start
+        minutes = int(t_delta.seconds / 60)
+        seconds = np.mod(t_delta.seconds, 60)
+
+        title = f'Trial {trial} – {minutes} min and {seconds}s since Trial 1'
+
+        plot_recorded_data(recorded_data, trial, does_plot, title=title, col=col)

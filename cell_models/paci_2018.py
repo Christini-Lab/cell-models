@@ -95,7 +95,8 @@ class PaciModel(CellModel):
                                         'Cai': 2,
                                         'Nai': 17},
                  ki_millimolar=130,
-                 nai_millimolar=None):
+                 nai_millimolar=None,
+                 exp_artefact_params=None):
         """Creates a Paci Model individual
 
         Leave `updated_parameters` argument empty if generating baseline trace
@@ -125,8 +126,7 @@ class PaciModel(CellModel):
             'K_NaCa': 1,
             'P_NaK': 1,
             'G_seal_leak': 1,
-            'V_off': 1,
-            'pipette_scale': 1
+            'V_off': 1
             }
 
         y_initial = [
@@ -146,7 +146,8 @@ class PaciModel(CellModel):
                          no_ion_selective_dict,
                          default_time_unit,
                          default_voltage_unit,
-                         is_exp_artefact=is_exp_artefact)
+                         is_exp_artefact=is_exp_artefact,
+                         exp_artefact_params=exp_artefact_params)
 
     def action_potential_diff_eq(self, t, y):
         if self.is_exp_artefact:
@@ -526,31 +527,22 @@ class PaciModel(CellModel):
                     i_no_ion += scale * current_dictionary[curr_name]
 
         if self.is_exp_artefact:
-
-                        ### Simple
-            i_ion = self.exp_artefacts.c_m_star*((i_k1 + i_to + i_kr + i_ks +
+            i_ion = self.exp_artefacts.c_m*((i_k1 + i_to + i_kr + i_ks +
                 i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
                 i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
 
-            i_seal_leak = self.exp_artefacts.get_i_leak(
-                    self.artefact_parameters['g_leak'],
-                    self.artefact_parameters['e_leak'], y[0] * 1000)
+            i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
 
             i_out = i_ion + i_seal_leak
 
-            #y[23] is v_cmd
-            v_p = y[26] * 1000 + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out * self.default_parameters['pipette_scale']
+            v_p = (y[26] * 1000 + self.exp_artefacts.alpha *
+                    self.exp_artefacts.r_access * -i_out)
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(
-                    self.artefact_parameters['c_m'],
-                    self.artefact_parameters['v_off'],
-                    self.artefact_parameters['r_pipette'] *
-                        self.default_parameters['pipette_scale'],
-                    v_p, y[0] * 1000, i_ion, i_seal_leak)
+            dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0] * 1000, -i_out)
 
-            i_ion = i_ion / self.exp_artefacts.c_m_star
-            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
-            i_out = i_out / self.exp_artefacts.c_m_star
+            i_ion = i_ion / self.exp_artefacts.c_m
+            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
+            i_out = i_out / self.exp_artefacts.c_m
 
             d_y[0] = dvm_dt
 

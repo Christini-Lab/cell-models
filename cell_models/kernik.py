@@ -46,7 +46,8 @@ class KernikModel(CellModel):
                  nai_millimolar=None,
                  updated_kinetics=None,
                  model_kinetics_type='Baseline',
-                 model_conductances_type='Baseline'
+                 model_conductances_type='Baseline',
+                 exp_artefact_params=None
                  ):
         
         model_parameters_obj = KernikModelParameters()
@@ -85,8 +86,7 @@ class KernikModel(CellModel):
             'G_b_Ca': 1,
             'G_PCa': 1,
             'G_seal_leak': 1,
-            'V_off': 1,
-            'pipette_scale': 1
+            'V_off': 1
         }
 
         if model_conductances_type == 'Random':
@@ -103,7 +103,8 @@ class KernikModel(CellModel):
                          no_ion_selective,
                          default_time_unit,
                          default_voltage_unit,
-                         is_exp_artefact=is_exp_artefact)
+                         is_exp_artefact=is_exp_artefact,
+                         exp_artefact_params=exp_artefact_params)
 
 
     def get_random_conductances(self, default_parameters, cond_range=10):
@@ -112,7 +113,7 @@ class KernikModel(CellModel):
         for k, val in default_parameters.items():
             if val == 0:
                 updated_parameters[k] = val
-            elif k in ['G_seal_leak', 'V_off', 'pipette_scale']:
+            elif k in ['G_seal_leak', 'V_off']:
                 updated_parameters[k] = val
             else:
                 updated_parameters[k] = 10**(np.random.uniform(np.log10(1/cond_range), np.log10(cond_range)))
@@ -154,11 +155,6 @@ class KernikModel(CellModel):
         # 21: O (in Irel)
         # 22: I (in Irel)
         """
-
-        #if self.i_stimulation != 0:
-        #    if t > 1468:
-        #        import pdb
-        #        pdb.set_trace()
 
         if self.is_exp_artefact:
             d_y = np.zeros(27)
@@ -277,32 +273,59 @@ class KernikModel(CellModel):
         # -------------------------------------------------------------------
         # Experimental Artefact
         if self.is_exp_artefact:
-            ### Simple
-            i_ion = self.exp_artefacts.c_m_star*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
+            ### Simple#################################
+            i_ion = self.exp_artefacts.c_m*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
 
-            i_seal_leak = self.exp_artefacts.get_i_leak(
-                    self.artefact_parameters['g_leak'],
-                    self.artefact_parameters['e_leak'], y[0])
+            i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
 
             i_out = i_ion + i_seal_leak
 
-            v_p = y[26] + self.exp_artefacts.alpha * self.artefact_parameters['r_pipette'] * i_out * self.default_parameters['pipette_scale']
+            v_p = (y[26] + self.exp_artefacts.alpha *
+                    self.exp_artefacts.r_access * -i_out)
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(
-                    self.artefact_parameters['c_m'], 
-                    self.artefact_parameters['v_off'],
-                    self.artefact_parameters['r_pipette'] * self.default_parameters['pipette_scale'],
-                    v_p, y[0], i_ion, i_seal_leak)
+            dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0], -i_out)
 
-            i_ion = i_ion / self.exp_artefacts.c_m_star
-            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m_star
-            i_out = i_out/ self.exp_artefacts.c_m_star
+            i_ion = i_ion / self.exp_artefacts.c_m
+            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
+            i_out = i_out / self.exp_artefacts.c_m
             i_cm = 0
             i_cp = 0
             i_in = 0
+            ################################################
+            ##############Involved##########################
+            #i_ion = self.exp_artefacts.c_m_star*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
+
+            #i_seal_leak = self.exp_artefacts.get_i_leak(
+            #        self.artefact_parameters['g_leak'],
+            #        self.artefact_parameters['e_leak'], y[0])
+
+            #dvm_dt = self.exp_artefacts.get_dvm_dt(
+            #        self.artefact_parameters['c_m'], 
+            #        self.artefact_parameters['v_off'],
+            #        (self.artefact_parameters['r_access'] *
+            #            self.default_parameters['r_access_scale']),
+            #        y[23], y[0], i_ion, i_seal_leak)
+
+            #dvp_dt = self.exp_artefacts.get_dvp_dt(y[24], y[23])
+
+            #dvclamp_dt = self.exp_artefacts.get_dvclamp_dt(y[26],
+            #        self.artefact_parameters['r_access'] * self.default_parameters['r_access_scale'],
+            #        y[25], y[24])
+
+            #i_in, i_cp, i_cm = self.exp_artefacts.get_i_in(i_ion, i_seal_leak,
+            #        self.artefact_parameters['c_p'],
+            #        dvp_dt, dvclamp_dt, self.artefact_parameters['c_m'],
+            #        dvm_dt)
+            #
+            #diout_dt = self.exp_artefacts.get_diout_dt(i_in, y[25])
+
+            #d_y[23] = dvp_dt
+            #d_y[24] = dvclamp_dt
+            #d_y[25] = diout_dt
+            ################################################
+            ################################################
 
             d_y[0] = dvm_dt
-
 
             if self.current_response_info:
                 current_timestep = [
@@ -324,10 +347,10 @@ class KernikModel(CellModel):
                     trace.Current(name='I_leak', value=i_leak),
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
-                    trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_Cm', value=i_cm),
                     trace.Current(name='I_Cp', value=i_cp),
                     trace.Current(name='I_in', value=i_in),
+                    trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_no_ion', value=i_no_ion),
                 ]
                 self.current_response_info.currents.append(current_timestep)

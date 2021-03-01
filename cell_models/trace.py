@@ -331,6 +331,15 @@ class Trace:
         self.voltages_with_offset = voltages_with_offset
         self.default_unit = default_unit
 
+    def get_i_v_in_time_range(self, t_start, t_end):
+        start = np.abs((self.t-t_start)).argmin()
+        end = np.abs((self.t-t_end)).argmin()
+
+        return pd.DataFrame({'Time (ms)': self.t[start:end],
+            'Current (pA/pF)': self.current_response_info.get_current_summed()[start:end],
+            'Voltage (mV)': self.y[start:end]})
+
+
     def get_cl(self):
         if self.last_ap is None:
             self.get_last_ap()
@@ -410,22 +419,8 @@ class Trace:
         if title:
             fig.suptitle(r'{}'.format(title), fontsize=22)
 
-    def adjust_sampling(self, frequency=1000):
-        """
-        The purpose of this function is to return the specified parameter with
-        a different sampling rate. It makes it easier to find an error in a GA
-        because the traces will be sampled at the same timepoints.
-
-        Parameters
-        ----------
-        frequency : integer
-            The number of samples per millisecond to resample the trace
-            from starting point to end point.
-        """
-        return
-
     def interpolate_current(self, time_resolution=10):
-        num_points = np.floor(self.t[-1]) * time_resolution
+        num_points = int(np.floor(self.t[-1]) * time_resolution)
         self.interp_time = np.linspace(self.t[0], np.floor(self.t[-1]),
                 num_points)
 
@@ -475,7 +470,7 @@ class Trace:
 
         ax_1.plot(
             [i for i in self.t],
-            [i for i in self.y],
+            [i for i in self.command_voltages],
             'b',
             label='Voltage')
         plt.xlabel('Time (ms)', fontsize=18)

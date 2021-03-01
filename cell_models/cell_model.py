@@ -22,7 +22,7 @@ class CellModel:
                  default_parameters=None, updated_parameters=None,
                  no_ion_selective_dict=None, default_time_unit='s',
                  default_voltage_unit='V', default_voltage_position=0,
-                 y_ss=None, is_exp_artefact=False):
+                 y_ss=None, is_exp_artefact=False, exp_artefact_params=None):
         self.y_initial = y_initial
         self.default_parameters = default_parameters
         self.no_ion_selective = {}
@@ -59,34 +59,23 @@ class CellModel:
         self.current_response_info = None
         self.full_y = []
 
-        if default_parameters is not None:
-            self.exp_artefacts = ExperimentalArtefacts()
 
-            e_leak = 0 #mV
-            # Change g_leak
-            g_leak = 1/1 * default_parameters['G_seal_leak'] #1/Gohms
+        self.exp_artefacts = ExperimentalArtefacts()
 
-            # Change v_off
-            v_off_shift = np.log10(default_parameters['V_off']) * 2
-            v_off = -2.8 + v_off_shift  #mV
+        if exp_artefact_params is not None:
+            for k, v in exp_artefact_params.items():
+                setattr(self.exp_artefacts, k, v)
 
-            c_p = 4 #pf
-            r_pipette = 5E-3 #Gohms
-            c_m = 60 # pf
-            r_access = 25E-3 #Gohms
+        self.exp_artefacts.g_leak *= default_parameters['G_seal_leak']
 
-            self.artefact_parameters = {'g_leak': g_leak,
-                                        'e_leak': e_leak,
-                                        'v_off': v_off,
-                                        'c_p': c_p,
-                                        'r_pipette': r_pipette,
-                                        'c_m': c_m,
-                                        'r_access': r_access}
+        v_off_shift = np.log10(default_parameters['V_off']) * 2
+        v_off = -2.8 + v_off_shift  #mV
+        self.exp_artefacts.v_off += v_off_shift
 
-            v_p_initial = 100 #mV
-            v_clamp_initial = 100 #mV
-            i_out_initial = 1
-            v_cmd_initial = -80 #mV
+        v_p_initial = -80 #mV
+        v_clamp_initial = -80 #mV
+        i_out_initial = 1
+        v_cmd_initial = -80 #mV
 
         if is_exp_artefact:
             """
@@ -414,6 +403,7 @@ class CellModel:
             max_step=1E-3*self.time_conversion,
             atol=1E-2, rtol=1E-4)
 
+
         self.t = solution.t
         self.y = solution.y
 
@@ -442,6 +432,9 @@ class CellModel:
             if self.is_exp_artefact:
                 try:
                     y[26] = protocol.get_voltage_at_time(t * 1e3 / self.time_conversion)
+                    # Breaks if Vcmd = 0
+                    if y[26] == 0:
+                        y[26] = .1
                 except:
                     y[26] = 20000
 
@@ -449,6 +442,9 @@ class CellModel:
             else:
                 try:
                     y[self.default_voltage_position] = protocol.get_voltage_at_time(t * 1E3 / self.time_conversion)
+                    #Can't handle Vcmd = 0
+                    if y[self.default_voltage_position] == 0: 
+                        y[self.default_voltage_position] = .1
                 except:
                     y[self.default_voltage_position] = 2000
             
@@ -606,7 +602,7 @@ class CellModel:
         #plt.plot(self.t, self.y_voltages)
         #plt.show()
 
-        return trace.Trace(exp_target, self.t,
+        return trace.Trace(exp_target, self.default_parameters, self.t,
                            command_voltages=self.command_voltages,
                            y=self.y_voltages,
                            current_response_info=self.current_response_info,
@@ -664,7 +660,7 @@ class CellModel:
         self.calc_currents(exp_target)
 
         voltages_offset_added = (self.y_voltages +
-                self.artefact_parameters['v_off'] / 1000 * self.time_conversion)
+                self.exp_artefacts['v_off'] / 1000 * self.time_conversion)
 
         return trace.Trace(exp_target, self.t,
                            y=voltages_offset_added,
@@ -674,8 +670,8 @@ class CellModel:
 
     def generate_exp_dynamic_clamp_function(self, exp_target):
         def dynamic_clamp(t, y):
-            r_access = self.artefact_parameters['r_access']
-            r_seal = 1 / self.artefact_parameters['g_leak']
+            r_access = self.exp_artefacts['r_access']
+            r_seal = 1 / self.exp_artefacts['g_leak']
 
             i_access_proportion = r_seal / (r_seal + r_access)
 

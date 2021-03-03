@@ -5,6 +5,7 @@ from scipy import integrate
 from scipy.signal import argrelextrema
 from cell_models import protocols, trace
 from cell_models.current_models import ExperimentalArtefacts
+
 class CellModel:
     """An implementation a general cell model
     Attributes:

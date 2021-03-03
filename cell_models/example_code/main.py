@@ -3,7 +3,6 @@ called `figures` for matplotlib pictures to be stored in."""
 import matplotlib.pyplot as plt
 
 from cell_models import protocols
-
 from cell_models.kernik import KernikModel
 from cell_models.paci_2018 import PaciModel
 from cell_models.ohara_rudy import OharaRudyModel
@@ -21,21 +20,21 @@ def spontaneous_example():
     plt.plot(tr_b.t, tr_b.y)
     plt.show()
 
-    PACI_PROTOCOL = protocols.SpontaneousProtocol(2000)
-    paci_baseline = PaciModel()
-    tr_bp = paci_baseline.generate_response(PACI_PROTOCOL,
-            is_no_ion_selective=False)
-    plt.plot(tr_bp.t, tr_bp.y)
-    plt.show()
+    #PACI_PROTOCOL = protocols.SpontaneousProtocol(2000)
+    #paci_baseline = PaciModel()
+    #tr_bp = paci_baseline.generate_response(PACI_PROTOCOL,
+    #        is_no_ion_selective=False)
+    #plt.plot(tr_bp.t, tr_bp.y)
+    #plt.show()
 
-    #HAVE NOT SET UP ARTEFACT OR PARAMETER SETTING
-    OHARA_RUDY = protocols.PacedProtocol(model_name="OR")
-    or_baseline = OharaRudyModel()
-    tr = or_baseline.generate_response(OHARA_RUDY, is_no_ion_selective=False)
-    plt.plot(tr.t, tr.y)
-    plt.show()
+    ##HAVE NOT SET UP ARTEFACT OR PARAMETER SETTING
+    #OHARA_RUDY = protocols.PacedProtocol(model_name="OR")
+    #or_baseline = OharaRudyModel()
+    #tr = or_baseline.generate_response(OHARA_RUDY, is_no_ion_selective=False)
+    #plt.plot(tr.t, tr.y)
+    #plt.show()
 
-# Stimulated
+# Paced 
 def stimulated_example():
     KERNIK_PROTOCOL = protocols.PacedProtocol(model_name="Kernik")
     kernik_baseline = KernikModel()
@@ -44,19 +43,19 @@ def stimulated_example():
     plt.plot(tr_b.t, tr_b.y)
     plt.show()
 
-    PACI_PROTOCOL = protocols.PacedProtocol(model_name="Paci")
-    paci_baseline = PaciModel()
-    tr_bp = paci_baseline.generate_response(PACI_PROTOCOL,
-            is_no_ion_selective=False)
-    plt.plot(tr_bp.t, tr_bp.y)
-    plt.show()
+    #PACI_PROTOCOL = protocols.PacedProtocol(model_name="Paci")
+    #paci_baseline = PaciModel()
+    #tr_bp = paci_baseline.generate_response(PACI_PROTOCOL,
+    #        is_no_ion_selective=False)
+    #plt.plot(tr_bp.t, tr_bp.y)
+    #plt.show()
 
-    #HAVE NOT SET UP ARTEFACT OR PARAMETER SETTING
-    OHARA_RUDY = protocols.PacedProtocol(model_name="OR")
-    or_baseline = OharaRudyModel()
-    tr = or_baseline.generate_response(OHARA_RUDY, is_no_ion_selective=False)
-    plt.plot(tr.t, tr.y)
-    plt.show()
+    ##HAVE NOT SET UP ARTEFACT OR PARAMETER SETTING
+    #OHARA_RUDY = protocols.PacedProtocol(model_name="OR")
+    #or_baseline = OharaRudyModel()
+    #tr = or_baseline.generate_response(OHARA_RUDY, is_no_ion_selective=False)
+    #plt.plot(tr.t, tr.y)
+    #plt.show()
 
 # Set parameter values (Kernik) and visualize currents
 def update_params():
@@ -123,8 +122,6 @@ def dynamic_ik1_ishi():
 
 # Incrementally increase IK1 ishihara current
 def increment_ishi():
-    KERNIK_PROTOCOL = protocols.PacedProtocol(model_name="Kernik", stim_end=10000, stim_mag=2)
-
     fig, axs = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
 
     KERNIK_PROTOCOL = protocols.SpontaneousProtocol(6000)
@@ -166,11 +163,13 @@ def increment_ishi():
 # Set the intracellular Ki and Nai concentrations
 def set_intracellular_conc():
     KERNIK_PROTOCOL = protocols.PacedProtocol(model_name="Kernik", stim_end=10000, stim_mag=2)
-    kernik_baseline = KernikModel()
+    KERNIK_PROTOCOL = protocols.SpontaneousProtocol(6000)
+    kernik_baseline = KernikModel(updated_parameters={'G_Kr': 3})
     tr_b = kernik_baseline.generate_response(KERNIK_PROTOCOL,
             is_no_ion_selective=False)
 
-    kernik_constant_conc = KernikModel(nai_millimolar=10, ki_millimolar=130)
+    kernik_constant_conc = KernikModel(updated_parameters={'G_Kr': 3, 'G_K1': 0},
+            nai_millimolar=10, ki_millimolar=130)
     tr_conc = kernik_constant_conc.generate_response(KERNIK_PROTOCOL,
             is_no_ion_selective=False)
 
@@ -182,8 +181,8 @@ def set_intracellular_conc():
 
     for i, tr in enumerate([tr_b, tr_conc]):
         axs[0].plot(tr.t, tr.y)
-        axs[1].plot(mods[i].t, mods[i].y[3,:])
-        axs[2].plot(mods[i].t, mods[i].y[4,:], label=names[i])
+        axs[1].plot(mods[i].t, mods[i].y[:, 3])
+        axs[2].plot(mods[i].t, mods[i].y[:, 4], label=names[i])
 
     axs[0].set_ylabel("Vm", fontsize=14)
     axs[1].set_ylabel("Nai", fontsize=14)
@@ -257,7 +256,7 @@ def main():
     #update_params()
     #dynamic_ik1_ishi()
     #increment_ishi()
-    set_intracellular_conc()
+    #set_intracellular_conc()
 
 
 if __name__ == '__main__':

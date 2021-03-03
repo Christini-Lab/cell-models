@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 class SpontaneousProtocol:
     """Encapsulates state and behavior of a single action potential protocol."""
 
-    def __init__(self, duration: float=1800):
+    def __init__(self, duration=1800):
         self.duration = duration
 
 class PacedProtocol:
@@ -19,8 +19,12 @@ class PacedProtocol:
     
     model_name: "Paci", "Kernik", "OR"
     """
-    def __init__(self, model_name, stim_end=6000,
-                 stim_start=10, pace=1, stim_mag=1):
+    def __init__(self,
+            model_name,
+            stim_end=6000,
+            stim_start=10,
+            pace=1,
+            stim_mag=1):
         """
 
         """

@@ -163,7 +163,41 @@ def increment_ishi():
     plt.legend()
     plt.show()
 
+# Set the intracellular Ki and Nai concentrations
+def set_intracellular_conc():
+    KERNIK_PROTOCOL = protocols.PacedProtocol(model_name="Kernik", stim_end=10000, stim_mag=2)
+    kernik_baseline = KernikModel()
+    tr_b = kernik_baseline.generate_response(KERNIK_PROTOCOL,
+            is_no_ion_selective=False)
 
+    kernik_constant_conc = KernikModel(nai_millimolar=10, ki_millimolar=130)
+    tr_conc = kernik_constant_conc.generate_response(KERNIK_PROTOCOL,
+            is_no_ion_selective=False)
+
+    
+    fig, axs = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
+
+    names = ['Baseline', 'Constant Concentrations']
+    mods = [kernik_baseline, kernik_constant_conc]
+
+    for i, tr in enumerate([tr_b, tr_conc]):
+        axs[0].plot(tr.t, tr.y)
+        axs[1].plot(mods[i].t, mods[i].y[3,:])
+        axs[2].plot(mods[i].t, mods[i].y[4,:], label=names[i])
+
+    axs[0].set_ylabel("Vm", fontsize=14)
+    axs[1].set_ylabel("Nai", fontsize=14)
+    axs[2].set_ylabel("Ki", fontsize=14)
+    axs[2].set_xlabel("Time (ms)", fontsize=14)
+
+    for ax in axs:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.tick_params(axis="x", labelsize=14)
+        ax.tick_params(axis="y", labelsize=14)
+
+    plt.legend()
+    plt.show()
 
 #TODO: Update artefacts for VC protocol
 def update_artefacts():
@@ -222,7 +256,8 @@ def main():
     #stimulated_example()
     #update_params()
     #dynamic_ik1_ishi()
-    increment_ishi()
+    #increment_ishi()
+    set_intracellular_conc()
 
 
 if __name__ == '__main__':

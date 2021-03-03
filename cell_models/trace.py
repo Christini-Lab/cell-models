@@ -517,7 +517,7 @@ class Trace:
             [i for i in self.t],
             [i for i in self.y],
             label=r'$V_m$')
-        axs[0].set_ylabel('Voltage (mV)')
+        axs[0].set_ylabel('Voltage (mV)', fontsize=14)
 
         if with_artefacts:
             axs[0].plot(
@@ -534,7 +534,7 @@ class Trace:
                         label=r'$I_{ion}$')
             axs[1].plot([i for i in self.t], [i for i in i_out], '--',
                         label=r'$I_{out}$')
-            axs[1].set_ylabel(r'$I_{total}$ (nA/nF)')
+            axs[1].set_ylabel(r'$I_{total}$ (nA/nF)', fontsize=14)
             axs[1].legend()
         else:
             axs[1].plot(
@@ -542,7 +542,7 @@ class Trace:
                 [i for i in self.current_response_info.get_current_summed()],
                 '--',
                 label=r'$I_{ion}$')
-            axs[1].set_ylabel(r'$I_m$ (nA/nF)')
+            axs[1].set_ylabel(r'$I_m$ (nA/nF)', fontsize=14)
 
         if not (len(currents) == 0):
             for i, current in enumerate(currents):
@@ -550,9 +550,16 @@ class Trace:
                 current_ax = 2 + i
                 axs[current_ax].plot([i for i in self.t], [i for i in i_curr],
                 label=current)
-                axs[current_ax].set_ylabel(f'{current} (pA/pF)')
+                axs[current_ax].set_ylabel(f'{current} (pA/pF)', fontsize=14)
                 axs[current_ax].legend()
 
-        axs[-1].set_xlabel("Time (ms)")
+        axs[-1].set_xlabel("Time (ms)", fontsize=14)
+
+        for ax in axs:
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.tick_params(axis="x", labelsize=14)
+            ax.tick_params(axis="y", labelsize=14)
+
         if is_shown:
             plt.show()

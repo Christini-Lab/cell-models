@@ -5,11 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="cell_models", # Replace with your own username
-<<<<<<< HEAD
     version="0.0.2",
-=======
-    version="0.0.1",
->>>>>>> 5bf36c6729b0911ebc16d100858f1fd0af8c17b6
     author="Alex Clark",
     author_email="apclarkva@gmail.com",
     description="This package contains cell models and the ability to apply various protocols to them.",

@@ -331,7 +331,7 @@ def remove_capacitive_current(time, voltage, current):
 
 
 def create_target_from_protocol(cell_model, protocol,
-        times_to_compare=None, g_ishi=None):
+        times_to_compare=None, g_ishi=None, with_ss=False):
     """
     This will create a target object from a cell model and protocol
     """
@@ -345,6 +345,9 @@ def create_target_from_protocol(cell_model, protocol,
     elif isinstance(protocol, protocols.VoltageClampProtocol):
         proto_type = "Voltage Clamp"
 
+    if with_ss:
+        cell_model.find_steady_state(max_iters=2)
+
     tr = cell_model.generate_response(protocol, is_no_ion_selective=is_no_ion_selective)
     
     if isinstance(cell_model, paci_2018.PaciModel):
@@ -355,8 +358,6 @@ def create_target_from_protocol(cell_model, protocol,
         scale = 1
     else:
         print('Model does not exist')
-        import pdb
-        pdb.set_trace()
 
     return TargetObjective(tr.t * scale,
                            tr.y * scale,

@@ -36,7 +36,7 @@ class KernikModel(CellModel):
     Km_Na = 40
 
     def __init__(self, updated_parameters=None,
-                 no_ion_selective=None,
+                 no_ion_selective_dict=None,
                  default_time_unit='ms',
                  default_voltage_unit='mV',
                  concentration_indices={'Ca_SR': 1, 'Cai': 2,
@@ -100,7 +100,7 @@ class KernikModel(CellModel):
         super().__init__(concentration_indices,
                          y_initial, default_parameters,
                          updated_parameters,
-                         no_ion_selective,
+                         no_ion_selective_dict,
                          default_time_unit,
                          default_voltage_unit,
                          is_exp_artefact=is_exp_artefact,
@@ -387,6 +387,29 @@ class KernikModel(CellModel):
 
         return d_y
 
+
+class KernikModelParameters():
+
+    def __init__(self):
+        """
+        This class will prepare the kinetics and conductance values for
+        a given Kernik model.
+        Parameters
+        ----------
+            kinetics – numpy 2d array
+                Each row corresponds to one kinetic parameter in the Kernik
+                model. The columns are:
+                Baseline model, Average model, STD, Min, Max
+                For reasons I do not know, the averages are usually, but
+                not always, equal to the Baseline model.
+            conductances – numpy 2d array
+                Each row corresponds to one conductance parameter in the Kernik
+                model. The columns are:
+                Baseline model, Average model, STD, Min, Max
+                For reasons I do not know, the averages are usually, but
+                not always, equal to the Baseline model.
+                The conductances are in the following order:
+                gk1 gkr gks gto gcal gcat gna gf
         """
         self.conductances = np.array([
             [0.133785778, 0.167232222, 0.1539573, 0.02287708, 0.37448125],

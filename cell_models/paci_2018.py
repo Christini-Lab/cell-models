@@ -155,7 +155,6 @@ class PaciModel(CellModel):
         else:
             d_y = np.zeros(24)
 
-
         # Nernst potential
         if self.nai_millimolar is not None:
             y[17] = self.nai_millimolar

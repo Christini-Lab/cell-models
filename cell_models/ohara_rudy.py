@@ -68,6 +68,12 @@ class OharaRudyModel(CellModel):
             7.268089977, 144.6555918, 144.6555651, 8.6e-05, 8.49e-05,\
             1.619574538, 1.571234014], dtype=np.float_)
 
+        default_parameters = {
+            'V_leak': 1,
+            'ks': 1,
+            'G_seal_leak': 1,
+            'V_off': 1
+        }
 
         
         super().__init__(concentration_indices, 

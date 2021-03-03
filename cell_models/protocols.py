@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 class SpontaneousProtocol:
     """Encapsulates state and behavior of a single action potential protocol."""
 
-    def __init__(self, duration: float=1.8):
+    def __init__(self, duration: float=1800):
         self.duration = duration
 
 class PacedProtocol:
@@ -32,7 +32,7 @@ class PacedProtocol:
             self.stim_duration = 1
         elif (model_name == "Paci"):
             self.stim_amplitude = 220 * stim_mag
-            self.stim_duration = 5/1000
+            self.stim_duration = 5
 
         self.pace = pace
         self.stim_end = stim_end
@@ -176,7 +176,6 @@ class VoltageClampRamp:
         self.duration = mutate(d_bounds, self.duration)
 
 
-
 class VoltageClampSinusoid:
     """A sinusoidal step in a voltage clamp protocol."""
 
@@ -223,69 +222,6 @@ class VoltageClampSinusoid:
             return False
         return (abs(self.voltage - other.voltage) < 0.001 and
                 abs(self.duration - other.duration) < 0.001)
-
-    def get_voltage(self, time):
-        fraction_change = time / self.duration
-        voltage_change = self.voltage_end - self.voltage_start
-        return self.voltage_start + fraction_change * voltage_change 
-
-    def mutate(self, vcga_params):
-        v_bounds = vcga_params.config.ga_config.step_voltage_bounds
-        d_bounds = vcga_params.config.ga_config.step_duration_bounds
-
-        self.voltage_start = mutate(v_bounds, self.voltage_start)
-        self.voltage_end = mutate(v_bounds, self.voltage_end)
-        self.duration = mutate(d_bounds, self.duration)
-
-
-
-class VoltageClampSinusoid:
-    """A sinusoidal step in a voltage clamp protocol."""
-
-    def __init__(self, voltage_start=None,
-                    voltage_amplitude=None,
-                    voltage_frequency=None,
-                    duration=None) -> None:
-        self.voltage_start = voltage_start
-        self.amplitude = voltage_amplitude
-        self.frequency = voltage_frequency
-        self.duration = duration
-
-    def set_to_random_step(self,
-                           voltage_bounds,
-                           duration_bounds,
-                           frq_bounds=[.005, .25],
-                           amp_bounds=[5, 75]):
-        v_start = -200
-        amplitude = -200
-        while (((v_start - abs(amplitude)) < voltage_bounds[0]) or
-                ((v_start + abs(amplitude)) > voltage_bounds[1])):
-            v_start = random.uniform(*voltage_bounds)
-            amplitude = random.choice([-1, 1])*random.uniform(*amp_bounds)
-        
-        self.duration = random.uniform(*duration_bounds)
-        self.frequency = random.uniform(*frq_bounds)
-        self.voltage_start = v_start
-        self.amplitude = amplitude
-
-    def get_voltage(self, time):
-        return np.sin(
-                self.frequency*time) * self.amplitude + self.voltage_start
-
-    def __str__(self):
-        return '|SINUSOID: Voltage Start: {}, Duration: {}, Amplitude: {}, Frequency: {}|'.format(
-                self.voltage_start, self.duration, self.amplitude, self.frequency)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __eq__(self, other):
-        return False
-        if not isinstance(other, self.__class__):
-            return False
-        return (abs(self.voltage - other.voltage) < 0.001 and
-                abs(self.duration - other.duration) < 0.001)
-
 
     def mutate(self, vcga_params, frq_bounds=[.005, .25]):
         v_bounds = vcga_params.config.ga_config.step_voltage_bounds

@@ -97,6 +97,7 @@ class CellModel:
             # 24: Vclamp (millivolt)
             # 25: Iout (nA)
             # 26: Vcmd (millivolt)
+            # 27: Vest (millivolt)
             """
             if default_voltage_unit == 'V':
                 conversion = 1000

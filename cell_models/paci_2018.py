@@ -545,6 +545,8 @@ class PaciModel(CellModel):
 
             d_y[0] = dvm_dt
 
+            
+
             if self.current_response_info:
                 current_timestep = [
                     trace.Current(name='I_K1', value=i_k1),

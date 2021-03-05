@@ -107,6 +107,8 @@ class CellModel:
             self.y_initial = np.append(self.y_initial, v_clamp_initial/conversion)
             self.y_initial = np.append(self.y_initial, i_out_initial)
             self.y_initial = np.append(self.y_initial, v_cmd_initial/conversion)
+            v_est = v_cmd_initial/conversion
+            self.y_initial = np.append(self.y_initial, v_est)
 
     @property
     def no_ion_selective(self):

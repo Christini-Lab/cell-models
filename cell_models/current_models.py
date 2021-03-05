@@ -635,7 +635,7 @@ class ExperimentalArtefactsThesis():
     """
     def __init__(self, g_leak=1, v_off=-2.8, e_leak=0, c_p=4, r_pipette=2E-3,
                  c_m=60, r_access=25E-3, alpha=.7, r_access_star=25E-3,
-                 c_m_star=60):
+                 c_m_star=60, tau_clamp=.8E-3, c_p_star=4, tau_z=7.5E-3):
         """
         Parameters:
             Experimental measures:
@@ -648,32 +648,42 @@ class ExperimentalArtefactsThesis():
         self.e_leak = e_leak
         self.v_off = v_off
         self.c_p = c_p
+        self.c_p_star = self.c_p_star
         self.r_pipette = r_pipette
         self.c_m = c_m
         self.r_access = r_access
         self.alpha = alpha
         self.r_access_star = r_access_star
         self.c_m_star = c_m_star
+        self.tau_clamp = tau_clamp
+        self.tau_z = tau_z
 
     def get_i_leak(self, v_m):
         return self.g_leak * (v_m - self.e_leak)
 
-    def get_dvm_dt(self, v_p, v_m, i_out):
+    def get_dvm_dt(self, v_p, v_m, i_ion, i_leak):
         dvm_dt = ((1/(self.r_access*self.c_m)) *
-                    (v_p + self.v_off - v_m) - (1/self.c_m) * i_out)
+                    (v_p + self.v_off - v_m) - (1/self.c_m) * i_ion + i_leak)
 
         return dvm_dt
-
     
     def get_dvp_dt(self, v_clamp, v_p):
-        return (1/self.tau_clamp)*(v_clamp - v_p)
+        return (1/self.tau_clamp) * (v_clamp - v_p)
 
-    def get_dvest_dt(self, v_cmd, v_est, ):
-        return (v_cmd - v_est) / ((1 - alpha)*self.r_access*self.c_m)
-    
-    def get_dvclamp_dt(self, v_cmd, r_s_star, i_out, v_clamp):
-        return ((1/self.tau_sum)*((v_cmd + self.alpha *
-                              r_s_star * i_out) - v_clamp))
+    def get_dvest_dt(self, v_cmd, v_est):
+        return (v_cmd - v_est) / ((1 - self.alpha)*self.r_access*self.c_m)
+
+    def get_vcmd_prime(self, v_cmd, i_out, d_vest_dt):
+        return (v_cmd + self.alpha * self.r_s_star *
+                (i_out + self.c_m_star*dvest_dt))
+
+    def get_dvclamp_dt(self, vcmd_prime, v_clamp):
+        return (1/self.tau_sum)*(vcmd_prime - v_clamp)
+
+    def get_di_in_dt(self, i_ion, i_leak, dvp_dt, dv_clamp_dt, dvm_dt):
+        return (i_ion + i_leak +
+                    self.c_p * dvp_dt - self.c_p_star * dv_clamp_dt +
+                        self.c_m * dvm_dt - self.c_m_star * dv_clamp_dt)
 
     def get_diout_dt(self, i_in, i_out):
         return (1/self.tau_z) * (i_in - i_out)

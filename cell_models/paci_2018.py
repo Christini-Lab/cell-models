@@ -151,7 +151,7 @@ class PaciModel(CellModel):
 
     def action_potential_diff_eq(self, t, y):
         if self.is_exp_artefact:
-            d_y = np.zeros(28)
+            d_y = np.zeros(29)
         else:
             d_y = np.zeros(24)
 
@@ -526,25 +526,55 @@ class PaciModel(CellModel):
                     i_no_ion += scale * current_dictionary[curr_name]
 
         if self.is_exp_artefact:
+            #i_ion = self.exp_artefacts.c_m*((i_k1 + i_to + i_kr + i_ks +
+            #    i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
+            #    i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
+
+            #i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
+
+            #i_out = i_ion + i_seal_leak
+
+            #v_p = (y[26] * 1000 + self.exp_artefacts.alpha *
+            #        self.exp_artefacts.r_access * -i_out)
+
+            #dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0] * 1000, -i_out)
+
+            #i_ion = i_ion / self.exp_artefacts.c_m
+            #i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
+            #i_out = i_out / self.exp_artefacts.c_m
+
+            #d_y[0] = dvm_dt
+
             i_ion = self.exp_artefacts.c_m*((i_k1 + i_to + i_kr + i_ks +
                 i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
                 i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
 
+            import pdb
+            pdb.set_trace()
+
             i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
 
-            i_out = i_ion + i_seal_leak
+            dvm_dt = self.exp_artefacts.get_dvm_dt(
+                    y[24], y[0], i_ion, i_seal_leak)
 
-            v_p = (y[26] * 1000 + self.exp_artefacts.alpha *
-                    self.exp_artefacts.r_access * -i_out)
+            dvp_dt = self.exp_artefacts.get_dvp_dt(y[25], y[24])
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0] * 1000, -i_out)
+            dvest_dt = self.exp_artefacts.get_dvest_dt(y[27], y[28])
 
-            i_ion = i_ion / self.exp_artefacts.c_m
-            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
-            i_out = i_out / self.exp_artefacts.c_m
+            vcmd_prime = self.exp_artefacts.get_vcmd_prime(y[27], y[26], dvest_dt)
+
+            dv_clamp_dt = self.exp_artefacts.get_dvclamp_dt(vcmd_prime, y[25])
+
+            i_in = self.exp_artefacts.get_di_in_dt(i_ion, i_seal_leak,
+                        dvp_dt, dv_clamp_dt, dvm_dt)
+
+            di_out_dt = self.exp_artefacts(i_in, y[26])
 
             d_y[0] = dvm_dt
-
+            d_y[24] = dvp_dt
+            d_y[25] = dv_clamp_dt
+            d_y[26] = di_out_dt
+            d_y[28] = dvest_dt
             
 
             if self.current_response_info:

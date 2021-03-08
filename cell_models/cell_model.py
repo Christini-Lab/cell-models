@@ -4,7 +4,7 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 from cell_models import protocols, trace
-from cell_models.current_models import ExperimentalArtefacts
+from cell_models.current_models import ExperimentalArtefactsThesis
 
 class CellModel:
     """An implementation a general cell model
@@ -48,7 +48,7 @@ class CellModel:
         self.d_y_voltage = []
         self.current_response_info = None
         self.full_y = []
-        self.exp_artefacts = ExperimentalArtefacts()
+        self.exp_artefacts = ExperimentalArtefactsThesis()
 
         if exp_artefact_params is not None:
             for k, v in exp_artefact_params.items():
@@ -103,12 +103,13 @@ class CellModel:
                 conversion = 1000
             else:
                 conversion = 1
-            self.y_initial = np.append(self.y_initial, v_p_initial/conversion)
-            self.y_initial = np.append(self.y_initial, v_clamp_initial/conversion)
-            self.y_initial = np.append(self.y_initial, i_out_initial)
-            self.y_initial = np.append(self.y_initial, v_cmd_initial/conversion)
+            self.y_initial = np.append(self.y_initial, 0)
+            self.y_initial = np.append(self.y_initial, 0)
+            self.y_initial = np.append(self.y_initial, 0)
+            self.y_initial = np.append(self.y_initial, 0)
+            self.cmd_index = len(self.y_initial) - 1
             v_est = v_cmd_initial/conversion
-            self.y_initial = np.append(self.y_initial, v_est)
+            self.y_initial = np.append(self.y_initial, 0)
 
     @property
     def no_ion_selective(self):
@@ -407,15 +408,16 @@ class CellModel:
     def generate_voltage_clamp_function(self, protocol):
         def voltage_clamp(t, y):
             if self.is_exp_artefact:
-                try:
-                    y[26] = protocol.get_voltage_at_time(t * 1e3 / self.time_conversion)
-                    # Breaks if Vcmd = 0
-                    if y[26] == 0:
-                        y[26] = .1
-                except:
-                    y[26] = 20000
 
-                y[26] /= (1E3 / self.time_conversion)
+                try:
+                    y[self.cmd_index] = protocol.get_voltage_at_time(t * 1e3 / self.time_conversion)
+                    # Breaks if Vcmd = 0
+                    if y[self.cmd_index] == 0:
+                        y[self.cmd_index] = .1
+                except:
+                    y[self.cmd_index] = 20000
+
+                y[self.cmd_index] /= (1E3 / self.time_conversion)
             else:
                 try:
                     y[self.default_voltage_position] = protocol.get_voltage_at_time(t * 1E3 / self.time_conversion)
@@ -577,6 +579,7 @@ class CellModel:
                 except:
                     y[self.default_voltage_position] = 2000
             y[self.default_voltage_position] /= (1E3 / self.time_conversion)
+            print(t)
             return self.action_potential_diff_eq(t, y)
         return voltage_clamp
     

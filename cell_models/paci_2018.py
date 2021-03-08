@@ -526,56 +526,63 @@ class PaciModel(CellModel):
                     i_no_ion += scale * current_dictionary[curr_name]
 
         if self.is_exp_artefact:
-            #i_ion = self.exp_artefacts.c_m*((i_k1 + i_to + i_kr + i_ks +
-            #    i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
-            #    i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
-
-            #i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
-
-            #i_out = i_ion + i_seal_leak
-
-            #v_p = (y[26] * 1000 + self.exp_artefacts.alpha *
-            #        self.exp_artefacts.r_access * -i_out)
-
-            #dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0] * 1000, -i_out)
-
-            #i_ion = i_ion / self.exp_artefacts.c_m
-            #i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
-            #i_out = i_out / self.exp_artefacts.c_m
-
-            #d_y[0] = dvm_dt
-
             i_ion = self.exp_artefacts.c_m*((i_k1 + i_to + i_kr + i_ks +
                 i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
                 i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
 
-            import pdb
-            pdb.set_trace()
+            g_leak = self.exp_artefacts.g_leak
+            e_leak = self.exp_artefacts.e_leak
+            c_m = self.exp_artefacts.c_m
+            c_m_star = self.exp_artefacts.c_m_star
+            r_access = self.exp_artefacts.r_access
+            v_off = self.exp_artefacts.v_off
+            tau_clamp = self.exp_artefacts.tau_clamp
+            alpha = self.exp_artefacts.alpha
+            r_access_star = self.exp_artefacts.r_access_star
+            tau_sum = self.exp_artefacts.tau_sum
+            c_p = self.exp_artefacts.c_p
+            c_p_star = self.exp_artefacts.c_p_star
+            tau_z = self.exp_artefacts.tau_z
 
-            i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
+            # y[24] : v_p
+            # y[25] : v_clamp
+            # y[26] : I_out 
+            # y[27] : v_cmd
+            # y[28] : v_est
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(
-                    y[24], y[0], i_ion, i_seal_leak)
+            i_seal_leak = g_leak * (y[0] - e_leak)
 
-            dvp_dt = self.exp_artefacts.get_dvp_dt(y[25], y[24])
+            dvm_dt = (1/r_access/c_m) * (y[24]*1000 + v_off - y[0]*1000) - (
+                    i_ion + i_seal_leak) / c_m 
 
-            dvest_dt = self.exp_artefacts.get_dvest_dt(y[27], y[28])
+            dvp_dt = 1/tau_clamp * (y[25]*1000 - y[24]*1000)
 
-            vcmd_prime = self.exp_artefacts.get_vcmd_prime(y[27], y[26], dvest_dt)
+            dvest_dt = (y[27]*1000 - y[28]*1000) / ((1 - alpha)
+                    * r_access_star*c_m_star)
 
-            dv_clamp_dt = self.exp_artefacts.get_dvclamp_dt(vcmd_prime, y[25])
+            vcmd_prime = y[27]*1000 + alpha * r_access_star * (
+                    y[26] + c_m_star * dvest_dt)
 
-            i_in = self.exp_artefacts.get_di_in_dt(i_ion, i_seal_leak,
-                        dvp_dt, dv_clamp_dt, dvm_dt)
+            dvclamp_dt = (vcmd_prime - y[25]*1000) / tau_sum
 
-            di_out_dt = self.exp_artefacts(i_in, y[26])
+            i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+            i_cm = c_m * dvm_dt - c_m_star * dvclamp_dt
+            # The model doesn't work when i_cm and i_cp are included
+            i_in = i_ion + i_seal_leak #+ i_cp + i_cm
 
+            di_out_dt = 1000 * (i_in - y[26]) / tau_z
+
+            i_out = y[26]
             d_y[0] = dvm_dt
             d_y[24] = dvp_dt
-            d_y[25] = dv_clamp_dt
+            d_y[25] = dvclamp_dt
             d_y[26] = di_out_dt
             d_y[28] = dvest_dt
-            
+
+            i_ion = i_ion / self.exp_artefacts.c_m
+            i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
+            i_out = i_out / self.exp_artefacts.c_m
+            i_in = i_in / self.exp_artefacts.c_m
 
             if self.current_response_info:
                 current_timestep = [
@@ -595,6 +602,7 @@ class PaciModel(CellModel):
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
                     trace.Current(name='I_out', value=i_out),
+                    trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_no_ion', value=i_no_ion),
                 ]
 

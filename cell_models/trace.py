@@ -342,7 +342,6 @@ class Trace:
             'Current (pA/pF)': self.current_response_info.get_current_summed()[start:end],
             'Voltage (mV)': self.y[start:end]})
 
-
     def get_cl(self):
         if self.last_ap is None:
             self.get_last_ap()
@@ -420,16 +419,6 @@ class Trace:
 
         if title:
             fig.suptitle(r'{}'.format(title), fontsize=22)
-
-    def interpolate_current(self, time_resolution=10):
-        num_points = int(np.floor(self.t[-1]) * time_resolution)
-        self.interp_time = np.linspace(self.t[0], np.floor(self.t[-1]),
-                num_points)
-
-        f = interp1d(self.t,
-                         self.current_response_info.get_current_summed())
-
-        self.interp_current = f(self.interp_time)
 
     def compare_individual(self, individual):
         if individual is None:
@@ -567,7 +556,10 @@ class Trace:
     def interpolate_data(self, time_resolution=1):
         npoints=max(self.t)/time_resolution
         tnew=np.linspace(min(self.t), max(self.t), npoints)
-        f=interp1d(self.t, self.y)
-        ynew=f(tnew)
+        f_v=interp1d(self.t, self.y)
+        ynew=f_v(tnew)
+        f_i = interp1d(self.t, self.current_response_info.get_current_summed())
+        i_new = f_i(tnew)
         self.y=ynew
         self.t=tnew
+        self.interp_current = i_new

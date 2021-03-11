@@ -563,3 +563,11 @@ class Trace:
 
         if is_shown:
             plt.show()
+            
+    def interpolate_data(self, time_resolution=1):
+        npoints=max(self.t)/time_resolution
+        tnew=np.linspace(min(self.t), max(self.t), npoints)
+        f=interp1d(self.t, self.y)
+        ynew=f(tnew)
+        self.y=ynew
+        self.t=tnew

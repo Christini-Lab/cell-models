@@ -342,7 +342,6 @@ class Trace:
             'Current (pA/pF)': self.current_response_info.get_current_summed()[start:end],
             'Voltage (mV)': self.y[start:end]})
 
-
     def get_cl(self):
         if self.last_ap is None:
             self.get_last_ap()

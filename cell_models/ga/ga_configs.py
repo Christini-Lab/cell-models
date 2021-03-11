@@ -113,8 +113,12 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
                  gene_mutation_probability: float,
                  tournament_size: int,
                  secondary_protocol: protocols.PROTOCOL_TYPE=None,
+                 max_iters=2,
+                 exp_artefact_params=None,
                  target_params=None,
                  with_exp_artefact=False,
+                 nai_millimolar=None,
+                 ki_millimolar=None
                  ) -> None:
         super().__init__(
             population_size=population_size,
@@ -133,6 +137,11 @@ class ParameterTuningConfig(GeneticAlgorithmConfig):
         self.with_exp_artefact = with_exp_artefact
         self.model_name = model_name
         self.cell_model = cell_model
+        self.max_iters=max_iters
+        self.exp_artefact_params = exp_artefact_params
+        self.nai_millimolar = nai_millimolar
+        self.ki_millimolar = ki_millimolar
+
 
     def has_equal_hyperparameters(self, other: 'ParameterTuningConfig') -> bool:
         return (super().has_equal_hyperparameters(other=other) and

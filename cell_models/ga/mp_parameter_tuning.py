@@ -209,7 +209,10 @@ def _initialize_individuals(ga_configuration, cell_model):
 
     return cell_model(
         updated_parameters=dict(zip(keys, initial_params)),
-        is_exp_artefact=ga_configuration.with_exp_artefact)
+        is_exp_artefact=ga_configuration.with_exp_artefact,
+        exp_artefact_params=ga_configuration.exp_artefact_params,
+        nai_millimolar=ga_configuration.nai_millimolar,
+        ki_millimolar=ga_configuration.ki_millimolar)
 
 
 def _evaluate_recovery(eval_input):
@@ -232,9 +235,9 @@ def _evaluate_recovery(eval_input):
         individual_model.y_ss = None
         individual_model.y_initial = y_initial
 
-        #TODO: Move model runs to .compare_individual()
         try:
-            error = command.compare_individual(individual_model)
+            error = command.compare_individual(individual_model,
+                    max_iters=GA_PARAMS.max_iters)
         except:
             print('Issue with .compare_individual()')
             error = 10E9
@@ -261,6 +264,7 @@ def _mate(i_one, i_two):
                 i_two[0].default_parameters[key] = (
                     i_two[0].default_parameters[key],
                     i_one[0].default_parameters[key])
+
 
 def _mutate(individual):
     """Performs a mutation on an individual in the population.

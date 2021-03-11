@@ -58,9 +58,9 @@ class CellModel:
         v_off_shift = np.log10(default_parameters['V_off']) * 2
         v_off = -2.8 + v_off_shift  #mV
         self.exp_artefacts.v_off += v_off_shift
-        v_p_initial = -80 #mV
-        v_clamp_initial = -80 #mV
-        i_out_initial = 1
+        default_parameters['R_access'] = 1 + .5 * (
+                default_parameters['R_access']-1)
+        self.exp_artefacts.r_access *= default_parameters['R_access']
         v_cmd_initial = -80 #mV
         if is_exp_artefact:
             """
@@ -182,7 +182,8 @@ class CellModel:
             elif protocol.protocol_type == "Dynamic Clamp":
                 return self.generate_exp_current_clamp(protocol)
 
-    def find_steady_state(self, ss_type=None, from_peak=False, tol=1E-3, max_iters=140):
+    def find_steady_state(self, ss_type=None, from_peak=False, tol=1E-3,
+            max_iters=140):
         """
         Finds the steady state conditions for a spontaneous or stimulated
         (in the case of OR) AP
@@ -203,7 +204,6 @@ class CellModel:
         import time
         outer_time = time.time()
 
-        print("Starting to find steady-state")
         while is_err:
             init_t = time.time()
 
@@ -225,14 +225,16 @@ class CellModel:
                 is_below_tol = (y_percent < tol)
                 is_err = not is_below_tol.all()
 
-            if i > max_iters:
-                print("Did not reach steady state. Setting y_ss to last iter.")
+            if i >= max_iters:
+                #print("Did not reach steady state. Setting y_ss to last iter.")
                 self.y_ss = y_val
                 return
 
             i = i + 1
-            print(
-                f'Iteration {i}; {time.time() - init_t} seconds; {y_percent}')
+
+            if i > 10:
+                print(
+                    f'Iteration {i}; {time.time() - init_t} seconds; {y_percent}')
 
         self.y_ss = y_values[-1]
         print(f'Total Time: {time.time() - outer_time}')

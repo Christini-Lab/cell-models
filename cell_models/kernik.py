@@ -86,7 +86,8 @@ class KernikModel(CellModel):
             'G_b_Ca': 1,
             'G_PCa': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'R_access': 1
         }
 
         if model_conductances_type == 'Random':

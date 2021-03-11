@@ -126,7 +126,8 @@ class PaciModel(CellModel):
             'K_NaCa': 1,
             'P_NaK': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'R_access': 1
             }
 
         y_initial = [

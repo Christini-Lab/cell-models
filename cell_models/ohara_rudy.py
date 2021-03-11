@@ -72,7 +72,8 @@ class OharaRudyModel(CellModel):
             'V_leak': 1,
             'ks': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'R_access': 1
         }
 
         

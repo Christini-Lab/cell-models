@@ -86,7 +86,8 @@ class KernikModel(CellModel):
             'G_b_Ca': 1,
             'G_PCa': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'R_access': 1
         }
 
         if model_conductances_type == 'Random':
@@ -157,10 +158,12 @@ class KernikModel(CellModel):
         """
 
         if self.is_exp_artefact:
-            d_y = np.zeros(27)
+            d_y = np.zeros(28)
         else:
             d_y = np.zeros(23)
 
+        if abs(y[0]) > 400:
+            return d_y
         # --------------------------------------------------------------------
         # Reversal Potentials:
         if self.nai_millimolar is not None:
@@ -273,55 +276,82 @@ class KernikModel(CellModel):
         # -------------------------------------------------------------------
         # Experimental Artefact
         if self.is_exp_artefact:
-            ### Simple#################################
+            ##############Involved##########################
             i_ion = self.exp_artefacts.c_m*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
+            g_leak = self.exp_artefacts.g_leak
+            e_leak = self.exp_artefacts.e_leak
+            c_m = self.exp_artefacts.c_m
+            c_m_star = self.exp_artefacts.c_m_star
+            r_access = self.exp_artefacts.r_access
+            v_off = self.exp_artefacts.v_off
+            tau_clamp = self.exp_artefacts.tau_clamp
+            comp_rs = self.exp_artefacts.comp_rs
+            comp_predrs = self.exp_artefacts.comp_predrs
+            r_access_star = self.exp_artefacts.r_access_star
+            tau_sum = self.exp_artefacts.tau_sum
+            c_p = self.exp_artefacts.c_p
+            c_p_star = self.exp_artefacts.c_p_star
+            tau_z = self.exp_artefacts.tau_z
 
-            i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
+            # y[23] : v_p
+            # y[24] : v_clamp
+            # y[25] : I_out 
+            # y[26] : v_cmd
+            # y[27] : v_est
 
-            i_out = i_ion + i_seal_leak
+            v_m = y[0]
+            v_p = y[23]
+            v_clamp = y[24]
+            i_out = y[25]
+            v_cmd = y[26]
+            v_est = y[27]
 
-            v_p = (y[26] + self.exp_artefacts.alpha *
-                    self.exp_artefacts.r_access * -i_out)
+            i_seal_leak = g_leak * (v_m - e_leak)
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0], -i_out)
+            #REMOVE to get thesis version
+            v_p = v_cmd + r_access_star * comp_rs * (i_ion + i_seal_leak)
+
+            dvm_dt = (1/r_access/c_m) * (v_p + v_off - y[0]) - (
+                    i_ion + i_seal_leak) / c_m 
+
+            dvp_dt = (v_clamp - v_p) / tau_clamp
+
+            if comp_predrs < .05:
+                dvest_dt = 0
+            else:
+                dvest_dt = (v_cmd - v_est) / ((1 - comp_predrs) *
+                        r_access_star * c_m_star / comp_predrs)
+
+            vcmd_prime = v_cmd + ((comp_rs * r_access_star * i_out) +
+                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
+
+            dvclamp_dt = (vcmd_prime - v_clamp) / tau_sum
+
+            #i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+            #
+            #if r_access_star < 1E-6:
+            #    i_cm = c_m_star * dvclamp_dt
+            #else:
+            #    i_cm = c_m_star * dvest_dt
+
+            i_in = (v_p - v_m + v_off) / r_access #+ i_cp - i_cm
+
+            di_out_dt = (i_in - i_out) / tau_z
+
+            d_y[0] = dvm_dt
+            d_y[23] = dvp_dt
+            d_y[24] = dvclamp_dt
+            d_y[25] = di_out_dt
+            d_y[27] = dvest_dt
 
             i_ion = i_ion / self.exp_artefacts.c_m
             i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
             i_out = i_out / self.exp_artefacts.c_m
-            i_cm = 0
-            i_cp = 0
-            i_in = 0
-            ################################################
-            ##############Involved##########################
-            #i_ion = self.exp_artefacts.c_m_star*((i_K1+i_to+i_Kr+ i_Ks+i_CaL+i_CaT+i_NaK+i_Na+i_NaCa + i_PCa+i_f+i_b_Na+i_b_Ca + i_K1_ishi + i_no_ion) - self.i_stimulation)
+            #REMOVE TO GET THESIS VERSION
+            i_out = i_ion + i_seal_leak
+            #i_cm = i_cm / self.exp_artefacts.c_m
+            #i_cp = i_cp / self.exp_artefacts.c_m
 
-            #i_seal_leak = self.exp_artefacts.get_i_leak(
-            #        self.artefact_parameters['g_leak'],
-            #        self.artefact_parameters['e_leak'], y[0])
-
-            #dvm_dt = self.exp_artefacts.get_dvm_dt(
-            #        self.artefact_parameters['c_m'], 
-            #        self.artefact_parameters['v_off'],
-            #        (self.artefact_parameters['r_access'] *
-            #            self.default_parameters['r_access_scale']),
-            #        y[23], y[0], i_ion, i_seal_leak)
-
-            #dvp_dt = self.exp_artefacts.get_dvp_dt(y[24], y[23])
-
-            #dvclamp_dt = self.exp_artefacts.get_dvclamp_dt(y[26],
-            #        self.artefact_parameters['r_access'] * self.default_parameters['r_access_scale'],
-            #        y[25], y[24])
-
-            #i_in, i_cp, i_cm = self.exp_artefacts.get_i_in(i_ion, i_seal_leak,
-            #        self.artefact_parameters['c_p'],
-            #        dvp_dt, dvclamp_dt, self.artefact_parameters['c_m'],
-            #        dvm_dt)
-            #
-            #diout_dt = self.exp_artefacts.get_diout_dt(i_in, y[25])
-
-            #d_y[23] = dvp_dt
-            #d_y[24] = dvclamp_dt
-            #d_y[25] = diout_dt
             ################################################
             ################################################
 
@@ -347,8 +377,8 @@ class KernikModel(CellModel):
                     trace.Current(name='I_leak', value=i_leak),
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
-                    trace.Current(name='I_Cm', value=i_cm),
-                    trace.Current(name='I_Cp', value=i_cp),
+                    #trace.Current(name='I_Cm', value=i_cm),
+                    #trace.Current(name='I_Cp', value=i_cp),
                     trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_no_ion', value=i_no_ion),
@@ -383,7 +413,6 @@ class KernikModel(CellModel):
                     trace.Current(name='I_stim', value=self.i_stimulation)
                 ]
                 self.current_response_info.currents.append(current_timestep)
-
 
         return d_y
 

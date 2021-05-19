@@ -11,8 +11,9 @@ from h5py import File
 
 
 class TargetObjective():
-    def __init__(self, time, voltage, current, capacitance,
-                 protocol_type, model_name, target_protocol=None, target_meta=None,
+    def __init__(self, time, voltage, current,
+                 protocol_type, model_name=None,  capacitance=None,
+                 target_protocol=None, target_meta=None,
                  times_to_compare=None, g_ishi=None):
         """
         Parameters
@@ -36,7 +37,6 @@ class TargetObjective():
         self.time = time
         self.voltage = voltage
         self.current = current
-        self.cm = capacitance
 
         #protocol-specific
         self.protocol_type = protocol_type
@@ -118,11 +118,10 @@ class TargetObjective():
                                     'I': np.array(new_currents)*1E12/self.cm,
                                     'V': new_voltages})
 
-    def compare_individual(self, individual_model, prestep=5000, return_all_errors=False):
-        prestep_proto = protocols.VoltageClampProtocol([protocols.VoltageClampStep(voltage=-80, duration=prestep)])
+    def compare_individual(self, individual_model,
+            max_iters=1, return_all_errors=False):
 
-        individual_model.generate_response(prestep_proto, is_no_ion_selective=False)
-        individual_model.y_ss = individual_model.y[:, -1]
+        individual_model.find_steady_state(max_iters=max_iters)
 
         #Cases:
             #1 is to see if the target is a simulation. If not, pass in
@@ -167,10 +166,16 @@ class TargetObjective():
             ind_interp_current = f(t_interp)
 
             if self.times_to_compare is not None:
+                if len(self.current) == 2:
+                    curr = [self.current[0][0:max_exp_index],
+                            self.current[1][0:max_exp_index]]
+                else:
+                    curr = self.current[0:max_exp_index]
                 error = self.calc_errors_in_ranges(ind_interp_current,
-                        self.current[0:max_exp_index],
-                        return_all_errors=return_all_errors)
+                        curr, return_all_errors=return_all_errors)
             else:
+                if len(self.current) == 2:
+                    print('Need to implement min-max cost function when no target range is specified. In target_objective.TargetObjective.compare_individual()')
                 error = sum(abs(ind_interp_current - self.current[0:max_exp_index]))
 
         elif self.protocol_type == 'Dynamic Clamp':
@@ -199,8 +204,29 @@ class TargetObjective():
             start_idx = self.get_index_at_tame(t_range[0])
             end_idx = self.get_index_at_tame(t_range[1])
 
-            new_error = sum(abs(ind_current[start_idx:end_idx] -
-                                target_current[start_idx:end_idx]))
+            if len(target_current) == 2:
+                ind_sub_curr = ind_current[start_idx:end_idx]
+                targ_min_curr = target_current[0][start_idx:end_idx]
+                targ_max_curr = target_current[1][start_idx:end_idx]
+                not_in_range = [i for i, v in
+                        enumerate(ind_sub_curr)
+                        if ((v < targ_min_curr[i]) or
+                            (v > targ_max_curr[i]))]
+                if not not_in_range:
+                    new_error = 0
+                else:
+                    range_errors = []
+                    for i in not_in_range:
+                        if ind_sub_curr[i] < targ_min_curr[i]:
+                            range_errors.append(
+                                    abs(ind_sub_curr[i] - targ_min_curr[i]))
+                        else:
+                            range_errors.append(
+                                    abs(ind_sub_curr[i] - targ_max_curr[i]))
+                    new_error = sum(range_errors)
+            else:
+                new_error = sum(abs(ind_current[start_idx:end_idx] -
+                                    target_current[start_idx:end_idx]))
 
             normed_error = new_error / (t_range[1] - t_range[0])
 
@@ -210,7 +236,6 @@ class TargetObjective():
             return errors
         else:
             return sum(errors)
-
 
     def get_index_at_tame(self, t):
         return int(round(self.freq * t))
@@ -242,7 +267,7 @@ def create_target_objective(target_meta):
     """
         This function will load in the exp h5 file and create a target obj
         The following adjustements are made to the parameters when the exp
-        parameters:
+        parametersg
             time (s -> cell_models) – zeroed by subtracting the min time and 
                 converted to ms
             voltage (V -> mV) – converted to mV
@@ -293,9 +318,9 @@ def create_target_objective(target_meta):
     target = TargetObjective(adjusted_time_range,
                              adjusted_voltage,
                              current,
-                             target_meta.mem_capacitance,
                              target_meta.protocol_type,
                              target_meta,
+                             capacitance=target_meta.mem_capacitance,
                              times_to_compare=max_current_ranges,
                              g_ishi=max_ishi)
 
@@ -362,7 +387,7 @@ def create_target_from_protocol(cell_model, protocol,
     return TargetObjective(tr.t * scale,
                            tr.y * scale,
                            tr.current_response_info.get_current_summed(),
-                           cell_model.cm_farad,
+                           capacitance=cell_model.cm_farad,
                            protocol_type=proto_type,
                            model_name=model_name,
                            target_protocol=protocol,

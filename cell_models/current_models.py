@@ -633,9 +633,10 @@ class ExperimentalArtefactsThesis():
         g_leak_dagger
         e_leak_dagger (should be zero)
     """
-    def __init__(self, g_leak=1, v_off=-2.8, e_leak=0, c_p=4, r_pipette=2E-3,
-                 c_m=60, r_access=25E-3, alpha=.7, r_access_star=25E-3,
-                 c_m_star=60):
+    def __init__(self, g_leak=.5, v_off=-2.8, e_leak=0, r_pipette=2E-3,
+                 comp_rs=.7, r_access_star=40E-3,
+                 c_m_star=60, tau_clamp=.8E-3, c_p_star=4, tau_z=7.5E-3,
+                 tau_sum=40E-3, comp_predrs=None):
         """
         Parameters:
             Experimental measures:
@@ -647,39 +648,17 @@ class ExperimentalArtefactsThesis():
         self.g_leak = g_leak
         self.e_leak = e_leak
         self.v_off = v_off
-        self.c_p = c_p
+        self.c_p = c_p_star * .95
+        self.c_p_star = c_p_star
         self.r_pipette = r_pipette
-        self.c_m = c_m
-        self.r_access = r_access
-        self.alpha = alpha
+        self.c_m = c_m_star * .95
+        self.r_access = r_access_star * .95
+        self.comp_rs = comp_rs # Rs compensation
         self.r_access_star = r_access_star
         self.c_m_star = c_m_star
+        self.tau_clamp = tau_clamp
+        self.tau_z = tau_z
+        self.tau_sum = tau_sum
 
-    def get_i_leak(self, v_m):
-        return self.g_leak * (v_m - self.e_leak)
-
-    def get_dvm_dt(self, v_p, v_m, i_out):
-        dvm_dt = ((1/(self.r_access*self.c_m)) *
-                    (v_p + self.v_off - v_m) - (1/self.c_m) * i_out)
-
-        return dvm_dt
-
-    
-    def get_dvp_dt(self, v_clamp, v_p):
-        return (1/self.tau_clamp)*(v_clamp - v_p)
-
-    def get_dvest_dt(self, v_cmd, v_est, ):
-        return (v_cmd - v_est) / ((1 - alpha)*self.r_access*self.c_m)
-    
-    def get_dvclamp_dt(self, v_cmd, r_s_star, i_out, v_clamp):
-        return ((1/self.tau_sum)*((v_cmd + self.alpha *
-                              r_s_star * i_out) - v_clamp))
-
-    def get_diout_dt(self, i_in, i_out):
-        return (1/self.tau_z) * (i_in - i_out)
-
-
-    def get_v_pipette(self, v_cmd, i_out):
-        v_p = v_cmd + self.alpha * self.r_pipette * i_out
-
-        return v_p
+        if comp_predrs is None:
+            self.comp_predrs = comp_rs # Rs prediction

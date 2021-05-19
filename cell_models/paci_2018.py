@@ -126,7 +126,8 @@ class PaciModel(CellModel):
             'K_NaCa': 1,
             'P_NaK': 1,
             'G_seal_leak': 1,
-            'V_off': 1
+            'V_off': 1,
+            'R_access': 1
             }
 
         y_initial = [
@@ -151,7 +152,7 @@ class PaciModel(CellModel):
 
     def action_potential_diff_eq(self, t, y):
         if self.is_exp_artefact:
-            d_y = np.zeros(28)
+            d_y = np.zeros(29)
         else:
             d_y = np.zeros(24)
 
@@ -530,22 +531,74 @@ class PaciModel(CellModel):
                 i_ca_l + i_na_k + i_na + i_na_l + i_na_ca + i_p_ca +
                 i_f + i_b_na + i_b_ca + i_no_ion) - self.i_stimulation)
 
-            i_seal_leak = self.exp_artefacts.get_i_leak(y[0])
+            g_leak = self.exp_artefacts.g_leak
+            e_leak = self.exp_artefacts.e_leak
+            c_m = self.exp_artefacts.c_m
+            c_m_star = self.exp_artefacts.c_m_star
+            r_access = self.exp_artefacts.r_access
+            v_off = self.exp_artefacts.v_off
+            tau_clamp = self.exp_artefacts.tau_clamp
+            comp_rs = self.exp_artefacts.comp_rs
+            comp_predrs = self.exp_artefacts.comp_predrs
+            r_access_star = self.exp_artefacts.r_access_star
+            tau_sum = self.exp_artefacts.tau_sum
+            c_p = self.exp_artefacts.c_p
+            c_p_star = self.exp_artefacts.c_p_star
+            tau_z = self.exp_artefacts.tau_z
 
-            i_out = i_ion + i_seal_leak
+            # y[24] : v_p
+            # y[25] : v_clamp
+            # y[26] : I_out 
+            # y[27] : v_cmd
+            # y[28] : v_est
 
-            v_p = (y[26] * 1000 + self.exp_artefacts.alpha *
-                    self.exp_artefacts.r_access * -i_out)
+            v_m = y[0]
+            v_p = y[24]
+            v_clamp = y[25]
+            i_out = y[26]
+            v_cmd = y[27]
+            v_est = y[28]
 
-            dvm_dt = self.exp_artefacts.get_dvm_dt(v_p, y[0] * 1000, -i_out)
+            i_seal_leak = g_leak * (v_m - e_leak)
+
+            dvm_dt = (1/r_access/c_m) * (v_p*1000 + v_off - v_m*1000) - (
+                    i_ion + i_seal_leak) / c_m 
+
+            dvp_dt = 1/tau_clamp * (v_clamp*1000 - v_p*1000)
+
+            if comp_predrs < 0.05:
+                dvest_dt = 0
+            else:
+                dvest_dt = (v_cmd*1000 - v_est*1000) / ((1 - comp_predrs) *
+                        r_access_star * c_m_star / comp_predrs)
+
+            vcmd_prime = v_cmd*1000 + ((comp_rs * r_access_star * i_out) +
+                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
+
+            dvclamp_dt = (vcmd_prime - v_clamp*1000) / tau_sum
+
+            i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+
+            if r_access_star < 1E-6:
+                i_cm = c_m_star * dvclamp_dt
+            else:
+                i_cm = c_m_star * dvest_dt 
+
+            i_in = (v_p*1000 - v_m*1000 + v_off) / r_access + i_cp - i_cm 
+
+            di_out_dt = 1000 * (i_in - i_out) / tau_z
+
+            i_out = y[26]
+            d_y[0] = dvm_dt
+            d_y[24] = dvp_dt
+            d_y[25] = dvclamp_dt
+            d_y[26] = di_out_dt
+            d_y[28] = dvest_dt
 
             i_ion = i_ion / self.exp_artefacts.c_m
             i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
             i_out = i_out / self.exp_artefacts.c_m
-
-            d_y[0] = dvm_dt
-
-            
+            i_in = i_in / self.exp_artefacts.c_m
 
             if self.current_response_info:
                 current_timestep = [
@@ -565,6 +618,7 @@ class PaciModel(CellModel):
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
                     trace.Current(name='I_out', value=i_out),
+                    trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_no_ion', value=i_no_ion),
                 ]
 

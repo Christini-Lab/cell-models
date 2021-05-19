@@ -278,7 +278,7 @@ def calculate_current_contributions(currents: List[List[Current]]):
     current_contributions = {}
 
     for time_steps in currents:
-        total_curr = sum([abs(curr.value) for curr in time_steps if curr.name not in ["I_out", "I_ion"]])
+        total_curr = sum([abs(curr.value) for curr in time_steps if curr.name not in ["I_out", "I_ion", "I_in"]])
         for current in time_steps:
             if current.name in current_contributions:
                 current_contributions[current.name].append(
@@ -438,7 +438,7 @@ class Trace:
 
         return error
 
-    def plot_currents_contribution(self, current, window=75, step_size=5, 
+    def plot_currents_contribution(self, current, window=10, step_size=5, 
             title=None, saved_to=None, voltage_bounds=None):
         current_contributions = self.current_response_info.\
             get_current_contributions(
@@ -495,7 +495,7 @@ class Trace:
     def plot_with_individual_currents(self, currents=[],
                                       with_artefacts=False, is_shown=True):
         """
-        Plots the voltage on tope, then the current response of each
+        Plots the voltage on top, then the current response of each
         input current.
         """
         num_subplots = len(currents) + 2 # +2 for Vm and Total current
@@ -552,7 +552,7 @@ class Trace:
 
         if is_shown:
             plt.show()
-            
+
     def interpolate_data(self, time_resolution=1):
         npoints=max(self.t)/time_resolution
         tnew=np.linspace(min(self.t), max(self.t), npoints)

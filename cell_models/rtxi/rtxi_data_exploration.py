@@ -39,7 +39,7 @@ def plot_V_and_I(data, t_range, title, col=None):
 
     axes[1].set_ylabel('Current (pA/pF)', fontsize=20)
     axes[1].set_xlabel('Time (s)', fontsize=20)
-    axes[1].plot(data['Time (s)'], data['Current'], col)
+    axes[1].plot(data['Time (s)'], data['Current (pA/pF)'], col)
     axes[1].tick_params(labelsize=14)
 
     axes[0].spines['top'].set_visible(False)
@@ -161,7 +161,7 @@ def get_exp_as_df(data_h5, trial_number, cm=60, is_filtered=False, t_range=None,
 
     d_as_frame = pd.DataFrame({'Time (s)': t_data,
                                'Voltage (V)': voltage,
-                               'Current': current / cm})
+                               'Current (pA/pF)': current / cm})
 
     if is_filtered:
         d_as_frame = filter_data(d_as_frame) 
@@ -183,7 +183,7 @@ def filter_data(df):
     max_t = df['Time (s)'].max()
 
     df['Voltage (V)'] = moving_average(df['Voltage (V)'])
-    df['Current'] = moving_average(df['Current'])
+    df['Current (pA/pF)'] = moving_average(df['Current (pA/pF)'])
 
     return df 
 

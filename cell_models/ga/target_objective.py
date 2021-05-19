@@ -12,7 +12,7 @@ from h5py import File
 
 class TargetObjective():
     def __init__(self, time, voltage, current,
-                 protocol_type, model_name,  capacitance=None,
+                 protocol_type, model_name=None,  capacitance=None,
                  target_protocol=None, target_meta=None,
                  times_to_compare=None, g_ishi=None):
         """

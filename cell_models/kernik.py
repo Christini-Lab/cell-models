@@ -285,7 +285,8 @@ class KernikModel(CellModel):
             r_access = self.exp_artefacts.r_access
             v_off = self.exp_artefacts.v_off
             tau_clamp = self.exp_artefacts.tau_clamp
-            alpha = self.exp_artefacts.alpha
+            comp_rs = self.exp_artefacts.comp_rs
+            comp_predrs = self.exp_artefacts.comp_predrs
             r_access_star = self.exp_artefacts.r_access_star
             tau_sum = self.exp_artefacts.tau_sum
             c_p = self.exp_artefacts.c_p
@@ -298,28 +299,45 @@ class KernikModel(CellModel):
             # y[26] : v_cmd
             # y[27] : v_est
 
-            i_seal_leak = g_leak * (y[0] - e_leak)
+            v_m = y[0]
+            v_p = y[23]
+            v_clamp = y[24]
+            i_out = y[25]
+            v_cmd = y[26]
+            v_est = y[27]
 
-            dvm_dt = (1/r_access/c_m) * (y[23] + v_off - y[0]) - (
+            i_seal_leak = g_leak * (v_m - e_leak)
+
+            #REMOVE to get thesis version
+            v_p = v_cmd + r_access_star * comp_rs * (i_ion + i_seal_leak)
+
+            dvm_dt = (1/r_access/c_m) * (v_p + v_off - y[0]) - (
                     i_ion + i_seal_leak) / c_m 
 
-            dvp_dt = 1/tau_clamp * (y[24] - y[23])
+            dvp_dt = (v_clamp - v_p) / tau_clamp
 
-            dvest_dt = (y[26] - y[27]) / ((1 - alpha) * r_access_star*c_m_star)
+            if comp_predrs < .05:
+                dvest_dt = 0
+            else:
+                dvest_dt = (v_cmd - v_est) / ((1 - comp_predrs) *
+                        r_access_star * c_m_star / comp_predrs)
 
-            vcmd_prime = y[26] + alpha * r_access_star * (
-                    y[25] + c_m_star * dvest_dt)
+            vcmd_prime = v_cmd + ((comp_rs * r_access_star * i_out) +
+                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
 
-            dvclamp_dt = (vcmd_prime - y[24]) / tau_sum
+            dvclamp_dt = (vcmd_prime - v_clamp) / tau_sum
 
-            i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
-            i_cm = c_m * dvm_dt - c_m_star * dvclamp_dt
-            # The model doesn't work when i_cm and i_cp are included
-            i_in = i_ion + i_seal_leak #+ i_cp + i_cm
+            #i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+            #
+            #if r_access_star < 1E-6:
+            #    i_cm = c_m_star * dvclamp_dt
+            #else:
+            #    i_cm = c_m_star * dvest_dt
 
-            di_out_dt = (i_in - y[25]) / tau_z
+            i_in = (v_p - v_m + v_off) / r_access #+ i_cp - i_cm
 
-            i_out = y[25]
+            di_out_dt = (i_in - i_out) / tau_z
+
             d_y[0] = dvm_dt
             d_y[23] = dvp_dt
             d_y[24] = dvclamp_dt
@@ -329,8 +347,10 @@ class KernikModel(CellModel):
             i_ion = i_ion / self.exp_artefacts.c_m
             i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
             i_out = i_out / self.exp_artefacts.c_m
-            i_cm = i_cm / self.exp_artefacts.c_m
-            i_cp = i_cp / self.exp_artefacts.c_m
+            #REMOVE TO GET THESIS VERSION
+            i_out = i_ion + i_seal_leak
+            #i_cm = i_cm / self.exp_artefacts.c_m
+            #i_cp = i_cp / self.exp_artefacts.c_m
 
             ################################################
             ################################################
@@ -357,8 +377,8 @@ class KernikModel(CellModel):
                     trace.Current(name='I_leak', value=i_leak),
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
-                    trace.Current(name='I_Cm', value=i_cm),
-                    trace.Current(name='I_Cp', value=i_cp),
+                    #trace.Current(name='I_Cm', value=i_cm),
+                    #trace.Current(name='I_Cp', value=i_cp),
                     trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_no_ion', value=i_no_ion),
@@ -393,7 +413,6 @@ class KernikModel(CellModel):
                     trace.Current(name='I_stim', value=self.i_stimulation)
                 ]
                 self.current_response_info.currents.append(current_timestep)
-
 
         return d_y
 

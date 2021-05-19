@@ -4,7 +4,9 @@ import numpy as np
 from scipy import integrate
 from scipy.signal import argrelextrema
 from cell_models import protocols, trace
+
 from cell_models.current_models import ExperimentalArtefactsThesis
+from cell_models.protocols import VoltageClampProtocol
 
 class CellModel:
     """An implementation a general cell model
@@ -383,7 +385,6 @@ class CellModel:
             max_step=1E-3*self.time_conversion,
             atol=1E-2, rtol=1E-4)
 
-
         self.t = solution.t
         self.y = solution.y
 
@@ -410,14 +411,13 @@ class CellModel:
     def generate_voltage_clamp_function(self, protocol):
         def voltage_clamp(t, y):
             if self.is_exp_artefact:
-
                 try:
                     y[self.cmd_index] = protocol.get_voltage_at_time(t * 1e3 / self.time_conversion)
-                    # Breaks if Vcmd = 0
+                # Breaks if Vcmd = 0
                     if y[self.cmd_index] == 0:
                         y[self.cmd_index] = .1
                 except:
-                    y[self.cmd_index] = 20000
+                    y[self.cmd_index] = 2000
 
                 y[self.cmd_index] /= (1E3 / self.time_conversion)
             else:
@@ -539,13 +539,14 @@ class CellModel:
         self.current_response_info = trace.CurrentResponseInfo(
             protocol=exp_target)
         solution = integrate.solve_ivp(
-            self.generate_voltage_clamp_function(exp_target),
+            self.generate_exp_voltage_clamp_function(exp_target),
             [0, floor(exp_target.time.max()) /
                 1E3 * self.time_conversion],
             y_init,
             method='BDF',
             max_step=1e-3*self.time_conversion,
             atol=1E-2, rtol=1E-4)
+
         self.t = solution.t
         self.y = solution.y
         command_voltages = [exp_target.get_voltage_at_time(t *
@@ -572,16 +573,20 @@ class CellModel:
             if self.is_exp_artefact:
                 try:
                     y[26] = exp_target.get_voltage_at_time(t * 1e3 / self.time_conversion)
+                    if y[self.cmd_index] == 0:
+                        y[self.cmd_index] = .1
                 except:
                     y[26] = 20000
                 y[26] /= (1E3 / self.time_conversion)
             else:
                 try:
                     y[self.default_voltage_position] = exp_target.get_voltage_at_time(t * 1E3 / self.time_conversion)
+
+                    if y[self.default_voltage_position] == 0: 
+                        y[self.default_voltage_position] = .1
                 except:
                     y[self.default_voltage_position] = 2000
             y[self.default_voltage_position] /= (1E3 / self.time_conversion)
-            print(t)
             return self.action_potential_diff_eq(t, y)
         return voltage_clamp
     

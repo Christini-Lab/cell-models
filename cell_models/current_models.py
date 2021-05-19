@@ -634,9 +634,9 @@ class ExperimentalArtefactsThesis():
         e_leak_dagger (should be zero)
     """
     def __init__(self, g_leak=.5, v_off=-2.8, e_leak=0, r_pipette=2E-3,
-                 alpha=.7, r_access_star=10E-3,
+                 comp_rs=.7, r_access_star=40E-3,
                  c_m_star=60, tau_clamp=.8E-3, c_p_star=4, tau_z=7.5E-3,
-                 tau_sum=10E-3):
+                 tau_sum=40E-3, comp_predrs=None):
         """
         Parameters:
             Experimental measures:
@@ -653,9 +653,12 @@ class ExperimentalArtefactsThesis():
         self.r_pipette = r_pipette
         self.c_m = c_m_star * .95
         self.r_access = r_access_star * .95
-        self.alpha = alpha
+        self.comp_rs = comp_rs # Rs compensation
         self.r_access_star = r_access_star
         self.c_m_star = c_m_star
         self.tau_clamp = tau_clamp
         self.tau_z = tau_z
         self.tau_sum = tau_sum
+
+        if comp_predrs is None:
+            self.comp_predrs = comp_rs # Rs prediction

@@ -538,7 +538,8 @@ class PaciModel(CellModel):
             r_access = self.exp_artefacts.r_access
             v_off = self.exp_artefacts.v_off
             tau_clamp = self.exp_artefacts.tau_clamp
-            alpha = self.exp_artefacts.alpha
+            comp_rs = self.exp_artefacts.comp_rs
+            comp_predrs = self.exp_artefacts.comp_predrs
             r_access_star = self.exp_artefacts.r_access_star
             tau_sum = self.exp_artefacts.tau_sum
             c_p = self.exp_artefacts.c_p
@@ -551,27 +552,41 @@ class PaciModel(CellModel):
             # y[27] : v_cmd
             # y[28] : v_est
 
-            i_seal_leak = g_leak * (y[0] - e_leak)
+            v_m = y[0]
+            v_p = y[24]
+            v_clamp = y[25]
+            i_out = y[26]
+            v_cmd = y[27]
+            v_est = y[28]
 
-            dvm_dt = (1/r_access/c_m) * (y[24]*1000 + v_off - y[0]*1000) - (
+            i_seal_leak = g_leak * (v_m - e_leak)
+
+            dvm_dt = (1/r_access/c_m) * (v_p*1000 + v_off - v_m*1000) - (
                     i_ion + i_seal_leak) / c_m 
 
-            dvp_dt = 1/tau_clamp * (y[25]*1000 - y[24]*1000)
+            dvp_dt = 1/tau_clamp * (v_clamp*1000 - v_p*1000)
 
-            dvest_dt = (y[27]*1000 - y[28]*1000) / ((1 - alpha)
-                    * r_access_star*c_m_star)
+            if comp_predrs < 0.05:
+                dvest_dt = 0
+            else:
+                dvest_dt = (v_cmd*1000 - v_est*1000) / ((1 - comp_predrs) *
+                        r_access_star * c_m_star / comp_predrs)
 
-            vcmd_prime = y[27]*1000 + alpha * r_access_star * (
-                    y[26] + c_m_star * dvest_dt)
+            vcmd_prime = v_cmd*1000 + ((comp_rs * r_access_star * i_out) +
+                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
 
-            dvclamp_dt = (vcmd_prime - y[25]*1000) / tau_sum
+            dvclamp_dt = (vcmd_prime - v_clamp*1000) / tau_sum
 
             i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
-            i_cm = c_m * dvm_dt - c_m_star * dvclamp_dt
-            # The model doesn't work when i_cm and i_cp are included
-            i_in = i_ion + i_seal_leak #+ i_cp + i_cm
 
-            di_out_dt = 1000 * (i_in - y[26]) / tau_z
+            if r_access_star < 1E-6:
+                i_cm = c_m_star * dvclamp_dt
+            else:
+                i_cm = c_m_star * dvest_dt 
+
+            i_in = (v_p*1000 - v_m*1000 + v_off) / r_access + i_cp - i_cm 
+
+            di_out_dt = 1000 * (i_in - i_out) / tau_z
 
             i_out = y[26]
             d_y[0] = dvm_dt

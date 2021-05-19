@@ -29,8 +29,8 @@ class KernikModel(CellModel):
     f_coulomb_per_mmole = 96.4853415
 
     Ko = 5.4 # millimolar (in model_parameters)
-    Cao = 1.8  # millimolar (in model_parameters
-    Nao = 140.0  # millimolar (in model_parameters)
+    Cao = 2.0  # millimolar (in model_parameters
+    Nao = 137  # millimolar (in model_parameters)
 
     # half-saturation constant millimolar (in i_NaK)
     Km_Na = 40

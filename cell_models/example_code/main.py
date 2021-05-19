@@ -1,6 +1,8 @@
 """Main driver for program. Before running, make sure to have a directory
 called `figures` for matplotlib pictures to be stored in."""
 import matplotlib.pyplot as plt
+from os import listdir, mkdir
+import pickle
 
 from cell_models import protocols
 from cell_models.kernik import KernikModel
@@ -97,20 +99,17 @@ def dynamic_ik1_ishi():
     baseline_kernik = KernikModel()
     tr_baseline = baseline_kernik.generate_response(KERNIK_PROTOCOL,
             is_no_ion_selective=False)
-    tr_baseline.plot_with_individual_currents()
 
     #Baseline Kernik with Ishihara DC
     mod_with_ishi_dc = KernikModel(no_ion_selective_dict={'I_K1_Ishi': .5})
     tr_ishi_dc = mod_with_ishi_dc.generate_response(KERNIK_PROTOCOL,
         is_no_ion_selective=True)
-    tr_ishi_dc.plot_with_individual_currents()
 
     #Kernik with Ishihara IK1 and Ishihara DC
     mod_ishi_and_dc = KernikModel(updated_parameters={'G_K1': 0, 'G_K1_Ishi': .5},
             no_ion_selective_dict={'I_K1_Ishi': .5})
     tr_ishi_and_dc = mod_ishi_and_dc.generate_response(KERNIK_PROTOCOL,
         is_no_ion_selective=True)
-    tr_ishi_and_dc.plot_with_individual_currents()
 
     # Compare the three
     plt.plot(tr_baseline.t, tr_baseline.y, label="Baseline") 
@@ -212,10 +211,10 @@ def update_artefacts():
                                                'alpha': .85 # series comp
                                                })
 
-# Run parameter tuning experiment
+# Run parameter tuning experiment to fit specified conductances
 def run_parameter_tuning():
     from cell_models.ga.parameter_tuning import ParameterTuningGeneticAlgorithm
-    from cell_models.ga import ga_configs
+    from cell_models.ga import ga_configs, target_objective, mp_parameter_tuning
 
     KERNIK_PARAMETERS = [
         ga_configs.Parameter(name='G_Na', default_value=1),
@@ -230,12 +229,17 @@ def run_parameter_tuning():
         ga_configs.Parameter(name='K_NaCa', default_value=1)
     ]
 
-    KERNIK_PROTOCOL = protocols.VoltageClampProtocol()
+    VC_PROTO = protocols.VoltageClampProtocol()
 
-    VC_CONFIG = ga_configs.ParameterTuningConfig(
-        population_size=30,
-        max_generations=10,
-        protocol=KERNIK_PROTOCOL,
+    KERNIK_MOD = KernikModel(is_exp_artefact=True)
+
+    baseline_target = target_objective.create_target_from_protocol(
+            KERNIK_MOD, VC_PROTO)
+
+    vc_config = ga_configs.ParameterTuningConfig(
+        population_size=140,
+        max_generations=80,
+        targets={'baseline_target': baseline_target},
         tunable_parameters=KERNIK_PARAMETERS,
         params_lower_bound=0.1,
         params_upper_bound=10,
@@ -243,11 +247,62 @@ def run_parameter_tuning():
         mutate_probability=0.9,
         gene_swap_probability=0.2,
         gene_mutation_probability=0.2,
-        tournament_size=4)
+        tournament_size=2,
+        with_exp_artefact=False,
+        model_name='Kernik', 
+        cell_model=KernikModel)
 
-    res_kernik = ParameterTuningGeneticAlgorithm('Kernik',
-                                                 VC_CONFIG,
-                                                 KERNIK_PROTOCOL)
+    mp_parameter_tuning.start_ga(vc_config)
+
+
+# Run parameter tuning experiment to fit specified conductances
+def run_vc_proto_ga():
+    from cell_models.ga import ga_configs, mp_voltage_clamp_optimization
+    from cell_models.ga import voltage_clamp_optimization_experiments
+
+    WITH_ARTEFACT = True
+
+    VCO_CONFIG = ga_configs.VoltageOptimizationConfig(
+        window=2,
+        step_size=2,
+        steps_in_protocol=5,
+        step_duration_bounds=(5, 1000),
+        step_voltage_bounds=(-120, 60),
+        target_current='I_Na',
+        population_size=200,
+        max_generations=50,
+        mate_probability=0.9,
+        mutate_probability=0.9,
+        gene_swap_probability=0.2,
+        gene_mutation_probability=0.1,
+        tournament_size=2,
+        step_types=['step', 'ramp'],
+        with_artefact=WITH_ARTEFACT,
+        model_name='Kernik')
+
+    #The currents parameter here is a vestige of an old implementation. TODO: remove
+    COMBINED_VC_CONFIG = ga_configs.CombinedVCConfig(
+        currents=['I_Na', 'I_K1', 'I_To', 'I_CaL', 'I_Kr', 'I_Ks'],
+        step_range=range(2, 3, 1),
+        adequate_fitness_threshold=0.95,
+        ga_config=VCO_CONFIG)
+
+    LIST_OF_CURRENTS = ['I_Na', 'I_Kr', 'I_Ks', 'I_F']
+
+    with_artefact=True
+    vco_dir_name = f'trial_steps_ramps_{VCO_CONFIG.model_name}_{VCO_CONFIG.population_size}_{VCO_CONFIG.max_generations}_{VCO_CONFIG.steps_in_protocol}_{VCO_CONFIG.step_voltage_bounds[0]}_{VCO_CONFIG.step_voltage_bounds[1]}'
+
+    if not vco_dir_name in listdir('results'):
+        mkdir(f'results/{vco_dir_name}')
+
+    for c in LIST_OF_CURRENTS:
+        f = f"./results/{vco_dir_name}/ga_results_{c}_artefact_{WITH_ARTEFACT}"
+        print(f"Finding best protocol for {c}. Writing protocol to: {f}")
+        VCO_CONFIG.target_current = c
+        result = mp_voltage_clamp_optimization.start_ga(COMBINED_VC_CONFIG)
+
+        pickle.dump(result, open(f, 'wb'))
+
 
 
 def main():
@@ -257,6 +312,8 @@ def main():
     #dynamic_ik1_ishi()
     #increment_ishi()
     #set_intracellular_conc()
+    #run_parameter_tuning()
+    run_vc_proto_ga()
 
 
 if __name__ == '__main__':

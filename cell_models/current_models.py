@@ -634,7 +634,7 @@ class ExperimentalArtefactsThesis():
         e_leak_dagger (should be zero)
     """
     def __init__(self, g_leak=.5, v_off=-2.8, e_leak=0, r_pipette=2E-3,
-                 comp_rs=.7, r_access_star=40E-3,
+                 comp_rs=.8, r_access_star=20E-3,
                  c_m_star=60, tau_clamp=.8E-3, c_p_star=4, tau_z=7.5E-3,
                  tau_sum=40E-3, comp_predrs=None):
         """

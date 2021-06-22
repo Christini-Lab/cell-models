@@ -314,18 +314,18 @@ class KernikModel(CellModel):
             dvm_dt = (1/r_access/c_m) * (v_p + v_off - y[0]) - (
                     i_ion + i_seal_leak) / c_m 
 
-            dvp_dt = (v_clamp - v_p) / tau_clamp
+            #dvp_dt = (v_clamp - v_p) / tau_clamp
 
-            if comp_predrs < .05:
-                dvest_dt = 0
-            else:
-                dvest_dt = (v_cmd - v_est) / ((1 - comp_predrs) *
-                        r_access_star * c_m_star / comp_predrs)
+            #if comp_predrs < .05:
+            #    dvest_dt = 0
+            #else:
+            #    dvest_dt = (v_cmd - v_est) / ((1 - comp_predrs) *
+            #            r_access_star * c_m_star / comp_predrs)
 
-            vcmd_prime = v_cmd + ((comp_rs * r_access_star * i_out) +
-                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
+            #vcmd_prime = v_cmd + ((comp_rs * r_access_star * i_out) +
+            #        (comp_predrs * r_access_star * c_m_star * dvest_dt))
 
-            dvclamp_dt = (vcmd_prime - v_clamp) / tau_sum
+            #dvclamp_dt = (vcmd_prime - v_clamp) / tau_sum
 
             #i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
             #
@@ -334,19 +334,19 @@ class KernikModel(CellModel):
             #else:
             #    i_cm = c_m_star * dvest_dt
 
-            i_in = (v_p - v_m + v_off) / r_access #+ i_cp - i_cm
+            #i_in = (v_p - v_m + v_off) / r_access #+ i_cp - i_cm
 
-            di_out_dt = (i_in - i_out) / tau_z
+            #di_out_dt = (i_in - i_out) / tau_z
 
             d_y[0] = dvm_dt
-            d_y[23] = dvp_dt
-            d_y[24] = dvclamp_dt
-            d_y[25] = di_out_dt
-            d_y[27] = dvest_dt
+            #d_y[23] = dvp_dt
+            #d_y[24] = dvclamp_dt
+            #d_y[25] = di_out_dt
+            #d_y[27] = dvest_dt
 
             i_ion = i_ion / self.exp_artefacts.c_m
             i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
-            i_out = i_out / self.exp_artefacts.c_m
+            #i_out = i_out / self.exp_artefacts.c_m
             #REMOVE TO GET THESIS VERSION
             i_out = i_ion + i_seal_leak
             #i_cm = i_cm / self.exp_artefacts.c_m
@@ -354,8 +354,6 @@ class KernikModel(CellModel):
 
             ################################################
             ################################################
-
-            d_y[0] = dvm_dt
 
             if self.current_response_info:
                 current_timestep = [
@@ -379,7 +377,7 @@ class KernikModel(CellModel):
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
                     #trace.Current(name='I_Cm', value=i_cm),
                     #trace.Current(name='I_Cp', value=i_cp),
-                    trace.Current(name='I_in', value=i_in),
+                    #trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_out', value=i_out),
                     trace.Current(name='I_no_ion', value=i_no_ion),
                 ]

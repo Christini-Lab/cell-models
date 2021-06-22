@@ -306,14 +306,14 @@ def run_vc_proto_ga():
 
 
 def main():
-    #spontaneous_example()
+    spontaneous_example()
     #stimulated_example()
     #update_params()
     #dynamic_ik1_ishi()
     #increment_ishi()
     #set_intracellular_conc()
     #run_parameter_tuning()
-    run_vc_proto_ga()
+    #run_vc_proto_ga()
 
 
 if __name__ == '__main__':

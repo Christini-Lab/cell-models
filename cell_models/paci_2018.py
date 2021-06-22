@@ -559,46 +559,49 @@ class PaciModel(CellModel):
             v_cmd = y[27]
             v_est = y[28]
 
-            i_seal_leak = g_leak * (v_m - e_leak)
+            i_seal_leak = g_leak * (v_m*1000 - e_leak)
 
-            dvm_dt = (1/r_access/c_m) * (v_p*1000 + v_off - v_m*1000) - (
+            v_p = 1000*v_cmd + r_access_star * comp_rs * (i_ion + i_seal_leak)
+
+            dvm_dt = (1/r_access/c_m) * (v_p + v_off - v_m*1000) - (
                     i_ion + i_seal_leak) / c_m 
 
-            dvp_dt = 1/tau_clamp * (v_clamp*1000 - v_p*1000)
+            #dvp_dt = 1/tau_clamp * (v_clamp*1000 - v_p*1000)
 
-            if comp_predrs < 0.05:
-                dvest_dt = 0
-            else:
-                dvest_dt = (v_cmd*1000 - v_est*1000) / ((1 - comp_predrs) *
-                        r_access_star * c_m_star / comp_predrs)
+            #if comp_predrs < 0.05:
+            #    dvest_dt = 0
+            #else:
+            #    dvest_dt = (v_cmd*1000 - v_est*1000) / ((1 - comp_predrs) *
+            #            r_access_star * c_m_star / comp_predrs)
 
-            vcmd_prime = v_cmd*1000 + ((comp_rs * r_access_star * i_out) +
-                    (comp_predrs * r_access_star * c_m_star * dvest_dt))
+            #vcmd_prime = v_cmd*1000 + ((comp_rs * r_access_star * i_out) +
+            #        (comp_predrs * r_access_star * c_m_star * dvest_dt))
 
-            dvclamp_dt = (vcmd_prime - v_clamp*1000) / tau_sum
+            #dvclamp_dt = (vcmd_prime - v_clamp*1000) / tau_sum
 
-            i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
+            #i_cp = c_p * dvp_dt - c_p_star * dvclamp_dt
 
-            if r_access_star < 1E-6:
-                i_cm = c_m_star * dvclamp_dt
-            else:
-                i_cm = c_m_star * dvest_dt 
+            #if r_access_star < 1E-6:
+            #    i_cm = c_m_star * dvclamp_dt
+            #else:
+            #    i_cm = c_m_star * dvest_dt 
 
-            i_in = (v_p*1000 - v_m*1000 + v_off) / r_access + i_cp - i_cm 
+            #i_in = (v_p*1000 - v_m*1000 + v_off) / r_access + i_cp - i_cm 
 
-            di_out_dt = 1000 * (i_in - i_out) / tau_z
+            #di_out_dt = 1000 * (i_in - i_out) / tau_z
 
-            i_out = y[26]
+            #i_out = y[26]
             d_y[0] = dvm_dt
-            d_y[24] = dvp_dt
-            d_y[25] = dvclamp_dt
-            d_y[26] = di_out_dt
-            d_y[28] = dvest_dt
+            #d_y[24] = dvp_dt
+            #d_y[25] = dvclamp_dt
+            #d_y[26] = di_out_dt
+            #d_y[28] = dvest_dt
 
             i_ion = i_ion / self.exp_artefacts.c_m
             i_seal_leak = i_seal_leak / self.exp_artefacts.c_m
-            i_out = i_out / self.exp_artefacts.c_m
-            i_in = i_in / self.exp_artefacts.c_m
+            #i_out = i_out / self.exp_artefacts.c_m
+            i_out = i_ion + i_seal_leak
+            #i_in = i_in / self.exp_artefacts.c_m
 
             if self.current_response_info:
                 current_timestep = [
@@ -618,7 +621,7 @@ class PaciModel(CellModel):
                     trace.Current(name='I_ion', value=i_ion),
                     trace.Current(name='I_seal_leak', value=i_seal_leak),
                     trace.Current(name='I_out', value=i_out),
-                    trace.Current(name='I_in', value=i_in),
+                    #trace.Current(name='I_in', value=i_in),
                     trace.Current(name='I_no_ion', value=i_no_ion),
                 ]
 

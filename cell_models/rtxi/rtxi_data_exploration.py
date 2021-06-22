@@ -140,6 +140,10 @@ def get_current_and_voltage(f, trial, trial_type=None):
     if (avg_early_voltage < -.079) and (avg_early_voltage > -.081):
         is_voltage_clamp = True
 
+    if (avg_early_voltage == 0):
+        #For funny current
+        is_voltage_clamp = True
+
     if not is_voltage_clamp:
         current = -current
 

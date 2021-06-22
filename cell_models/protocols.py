@@ -368,7 +368,8 @@ class VoltageClampProtocol:
         else:
             return current_step.get_voltage(time_into_step)
 
-    def plot_voltage_clamp_protocol(self, saved_to=None, is_plotted=True):
+    def plot_voltage_clamp_protocol(self, saved_to=None,
+            is_plotted=True, ax=None):
         duration = self.get_voltage_change_endpoints()[-1]
 
         times = np.arange(0, duration, 1)
@@ -378,15 +379,19 @@ class VoltageClampProtocol:
         for t in times:
             voltages.append(self.get_voltage_at_time(t))
 
-        plt.figure(figsize=(12, 7))
-        ax = plt.subplot()
-        plt.plot(times, voltages)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        plt.xlabel("Time (ms)", fontsize=18)
-        plt.ylabel("Voltages (mV)", fontsize=18)
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
+        if ax is None:
+            plt.figure(figsize=(12, 5))
+            ax = plt.subplot()
+            ax.plot(times, voltages, 'k')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            plt.xlabel("Time (ms)", fontsize=18)
+            plt.ylabel("Voltages (mV)", fontsize=18)
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
+        else:
+            ax.plot(times, voltages, 'k')
+
 
         if saved_to:
             plt.savefig(saved_to)

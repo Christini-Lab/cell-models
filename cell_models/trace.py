@@ -287,6 +287,10 @@ def calculate_current_contributions(currents: List[List[Current]]):
                 current_contributions[current.name] = [
                         abs(current.value) / total_curr]
 
+            if current.name in ["I_out", "I_ion", "I_in"]:
+                current_contributions[current.name] = [0]
+
+
     for key, val in current_contributions.items():
         current_contributions[key] = sum(val)/len(val)
 

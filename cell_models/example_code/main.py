@@ -211,6 +211,30 @@ def update_artefacts():
                                                'alpha': .85 # series comp
                                                })
 
+
+# Dynamica clamp of multiple params 
+def dynamic_clamp():
+    KERNIK_PROTOCOL = protocols.PacedProtocol(model_name="Kernik", stim_end=10000, stim_mag=2)
+
+    #Baseline Kernik
+    m_ishi = KernikModel(no_ion_selective_dict={'I_K1_Ishi': .75})
+    tr_ishi = m_ishi.generate_response(KERNIK_PROTOCOL,
+            is_no_ion_selective=True)
+
+    #Baseline Kernik with Ishihara DC
+    mod_with_ishi_dc = KernikModel(no_ion_selective_dict={'I_K1_Ishi': .5,
+        'I_CaL': .5})
+    tr_ishi_dc = mod_with_ishi_dc.generate_response(KERNIK_PROTOCOL,
+        is_no_ion_selective=True)
+
+    # Compare the three
+    plt.plot(tr_ishi.t, tr_ishi.y, label="Ishihara") 
+    plt.plot(tr_ishi_dc.t, tr_ishi_dc.y, label="Ishihara+ICaL DC") 
+    plt.legend()
+    plt.show()
+
+
+
 # Run parameter tuning experiment to fit specified conductances
 def run_parameter_tuning():
     from cell_models.ga.parameter_tuning import ParameterTuningGeneticAlgorithm
@@ -306,14 +330,16 @@ def run_vc_proto_ga():
 
 
 def main():
-    spontaneous_example()
+    #spontaneous_example()
     #stimulated_example()
     #update_params()
     #dynamic_ik1_ishi()
     #increment_ishi()
     #set_intracellular_conc()
+    dynamic_clamp()
     #run_parameter_tuning()
     #run_vc_proto_ga()
+
 
 
 if __name__ == '__main__':

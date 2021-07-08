@@ -443,7 +443,8 @@ class Trace:
         return error
 
     def plot_currents_contribution(self, current, window=10, step_size=5, 
-            title=None, saved_to=None, voltage_bounds=None):
+            title=None, saved_to=None, voltage_bounds=None,
+            fig=None, axs=None, is_shown=True):
         current_contributions = self.current_response_info.\
             get_current_contributions(
                 time=self.t,
@@ -460,28 +461,32 @@ class Trace:
             c.append(current_contributions[current].loc[idx])
 
 
-        fig, (ax_1, ax_2) = plt.subplots(2, 1, num=1, sharex=True, figsize=(12, 8))
-
+        if axs is None:
+            fig, (ax_1, ax_2) = plt.subplots(2, 1, num=1, sharex=True, figsize=(12, 8))
+        else:
+            ax_1, ax_2 = axs
 
         ax_1.plot(
             [i for i in self.t],
             [i for i in self.command_voltages],
-            'b',
+            'k',
             label='Voltage')
-        plt.xlabel('Time (ms)', fontsize=18)
-        plt.ylabel(r'$V_m$ (mV)', fontsize=18)
+        ax_1.set_ylabel(r'$V_{command}$ (mV)', fontsize=18)
 
         if voltage_bounds is not None:
             ax_1.set_ylim(voltage_bounds[0], voltage_bounds[1])
         
         ax_im = ax_2.scatter(self.t, total_current, c=c, cmap=cm.copper, vmin=0, vmax=1)
-        plt.ylabel(r'$I_m$ (nA/nF)', fontsize=18)
+        ax_2.set_ylabel(r'$I_m$ (nA/nF)', fontsize=18)
+        ax_2.set_xlabel('Time (ms)', fontsize=18)
+
+        max_idx = np.argmax(c)
+        ax_1.axvspan(self.t[max_idx]-10, self.t[max_idx]+10, color='g', alpha=.3)
+                #np.min(total_current), np.max(total_current), color='g', alpha=.3)
 
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
         fig.colorbar(ax_im, cax=cbar_ax)
-
-        ax_1.spines['top'].set_visible(False)
 
         if title is not None:
             fig.suptitle(title)
@@ -489,11 +494,13 @@ class Trace:
         for ax in [ax_1, ax_2]:
             ax.tick_params(axis="x", labelsize=14)
             ax.tick_params(axis="y", labelsize=14)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
 
-
-        if saved_to is None:
+        if is_shown:
             plt.show()
-        else: 
+
+        if saved_to:
             plt.savefig(saved_to)
 
     def plot_with_individual_currents(self, currents=[],

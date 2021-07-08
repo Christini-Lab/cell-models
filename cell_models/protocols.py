@@ -369,7 +369,7 @@ class VoltageClampProtocol:
             return current_step.get_voltage(time_into_step)
 
     def plot_voltage_clamp_protocol(self, saved_to=None,
-            is_plotted=True, ax=None):
+            is_plotted=True, ax=None, fig=None):
         duration = self.get_voltage_change_endpoints()[-1]
 
         times = np.arange(0, duration, 1)
@@ -380,8 +380,7 @@ class VoltageClampProtocol:
             voltages.append(self.get_voltage_at_time(t))
 
         if ax is None:
-            plt.figure(figsize=(12, 5))
-            ax = plt.subplot()
+            fig, ax = plt.subplots(1, 1, figsize=(12, 5))
             ax.plot(times, voltages, 'k')
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
@@ -398,6 +397,8 @@ class VoltageClampProtocol:
             
         if is_plotted:
             plt.show()
+        else:
+            return fig, ax
 
     def to_csv(self, path, period=0.1):
         length_of_proto = self.get_voltage_change_endpoints()[-1]

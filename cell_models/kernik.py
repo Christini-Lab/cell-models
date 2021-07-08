@@ -267,11 +267,21 @@ class KernikModel(CellModel):
                 'I_up':    i_up,
                 'I_leak':  i_leak
             }
+            
+        conductance_dict = {'I_K1': 'G_K1', 'I_To': 'G_to', 'I_Kr': 'G_Kr',
+                            'I_Ks': 'G_Ks', 'I_CaL': 'G_CaL', 'I_NaK': 'P_NaK',
+                            'I_Na': 'G_Na', 'I_NaCa': 'K_NaCa', 'I_pCa': 'G_PCa',
+                            'I_F': 'G_F', 'I_bNa': 'G_b_Na', 'I_bCa': 'G_b_Ca',
+                            'I_CaT': 'G_CaT', 'I_up': 'VmaxUp',
+                            'I_leak': 'V_leak'}
+
             for curr_name, scale in self.no_ion_selective.items():
                 if curr_name == 'I_K1_Ishi':
                     i_no_ion += scale * Ishi.I_K1(y[0], E_K, y[5], self.Ko, 1)[0]
                 else:
-                    i_no_ion += scale * current_dictionary[curr_name]
+                    cond_name = conductance_dict[curr_name]
+                    i_no_ion += (scale * current_dictionary[curr_name] / 
+                                        self.default_parameters[cond_name])
 
         # -------------------------------------------------------------------
         # Experimental Artefact
